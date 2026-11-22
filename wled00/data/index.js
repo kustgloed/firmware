@@ -1406,14 +1406,6 @@ function updateSelectedFx()
 	}
 }
 
-function displayRover(i,s)
-{
-	gId('rover').style.transform = (i.live && s.lor == 0 && i.liveseg<0) ? "translateY(0px)":"translateY(100%)";
-	var sour = i.lip ? i.lip:""; if (sour.length > 2) sour = " from " + sour;
-	gId('lv').innerHTML = `WLED is receiving live ${i.lm} data${sour}`;
-	gId('roverstar').style.display = (i.live && s.lor) ? "block":"none";
-}
-
 function cmpP(a, b)
 {
 	if (cfg.comp.idsort || !a[1].n) return (parseInt(a[0]) > parseInt(b[0]));
@@ -1448,7 +1440,6 @@ function makeWS() {
 		} else
 			i = lastinfo;
 		var s = json.state ? json.state : json;
-		displayRover(i, s);
 		readState(s);
 	};
 	ws.onclose = (e)=>{
