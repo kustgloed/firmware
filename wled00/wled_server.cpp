@@ -623,11 +623,17 @@ void initServer()
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (captivePortal(request)) return;
+#ifdef KITE_WIND_SETTINGS_HOME
+    AsyncWebServerResponse *response = request->beginResponse(302);
+    response->addHeader(F("Location"), F("/settings"));
+    request->send(response);
+#else
     if (!showWelcomePage || request->hasArg(F("sliders"))) {
       handleStaticContent(request, F("/index.htm"), 200, FPSTR(CONTENT_TYPE_HTML), PAGE_index, PAGE_index_length);
     } else {
       serveSettings(request);
     }
+#endif
   });
 
 #ifndef WLED_DISABLE_2D
