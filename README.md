@@ -31,6 +31,26 @@ generates headers from the checked-in UI source. The build uses the
 public sample and upstream defaults. Configure device Wi-Fi and service
 access after flashing.
 
+## Release build check
+
+From the firmware checkout, use Git and Docker to build into an empty output directory.
+
+```sh
+output="$(mktemp -d)"
+printf '%s\n' "$output"
+tools/release-check/run.sh "$output"
+```
+
+The check builds `kite`, `kite_s3`, and `esp32dev` in a clean Linux ARM64
+container. It builds the source at `HEAD` by default. Pass a commit or tag
+as the second argument to select another revision. The source archive excludes
+working-tree files and local device settings.
+
+The check verifies both compiler path-map flags and scans the raw, gzip,
+and factory images produced by the build for `/Users` and `/home` paths.
+A passing run writes the verified images under `images/` in the output
+directory, with build logs and SHA-256 checksums in `results.txt`.
+
 ## Flash
 
 Connect the confirmed board by USB and close any serial monitor using that
