@@ -706,18 +706,6 @@ void getSettingsJS(byte subPage, Print& settingsScript)
   {
     appendGPIOinfo(settingsScript);
     settingsScript.printf_P(PSTR("numM=%d;"), UsermodManager::getModCount());
-    printSetFormValue(settingsScript,PSTR("SDA"),i2c_sda);
-    printSetFormValue(settingsScript,PSTR("SCL"),i2c_scl);
-    printSetFormValue(settingsScript,PSTR("MOSI"),spi_mosi);
-    printSetFormValue(settingsScript,PSTR("MISO"),spi_miso);
-    printSetFormValue(settingsScript,PSTR("SCLK"),spi_sclk);
-    settingsScript.printf_P(PSTR("addInfo('SDA','%d');"
-                 "addInfo('SCL','%d');"
-                 "addInfo('MOSI','%d');"
-                 "addInfo('MISO','%d');"
-                 "addInfo('SCLK','%d');"),
-      HW_PIN_SDA, HW_PIN_SCL, HW_PIN_DATASPI, HW_PIN_MISOSPI, HW_PIN_CLOCKSPI
-    );
     UsermodManager::appendConfigData(settingsScript);
   }
 
