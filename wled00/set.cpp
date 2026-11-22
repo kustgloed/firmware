@@ -833,7 +833,7 @@ void handleSettingsSet(AsyncWebServerRequest *request, byte subPage)
           else                         subObj[name].add(value.toInt());    // we may have an int
           j++;
         }
-        DEBUG_PRINTF_P(PSTR("[%d] = %s\n"), j, value.c_str());
+        DEBUG_PRINTF_P(PSTR("[%d] = %s\n"), j, name == F("api-key") ? "<redacted>" : value.c_str());
       } else {
         // we are using a hidden field with the same name as our parameter (!before the actual parameter!)
         // to describe the type of parameter (text,float,int), for boolean parameters the first field contains "off"
@@ -852,7 +852,7 @@ void handleSettingsSet(AsyncWebServerRequest *request, byte subPage)
           } else if (type == "int")      subObj[name] = value.toInt();
           else                           subObj[name] = value;  // text fields
         }
-        DEBUG_PRINTF_P(PSTR(" = %s\n"), value.c_str());
+        DEBUG_PRINTF_P(PSTR(" = %s\n"), name == F("api-key") ? "<redacted>" : value.c_str());
       }
     }
     UsermodManager::readFromConfig(um);  // force change of usermod parameters
