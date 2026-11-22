@@ -9,6 +9,7 @@
 #include <memory>
 #include <lwip/dns.h>
 #include <lwip/err.h>
+#include <lwip/tcpip.h>   // LOCK_TCPIP_CORE() when core locking is enabled
 
 class AsyncDNS {
 
@@ -42,7 +43,14 @@ class AsyncDNS {
     if (!callback_state) return {};
 
     current->_status = result::Busy;
+    // pioarduino/IDF 5 asserts unless raw lwIP calls hold the TCPIP core lock (AI-assisted fix)
+#if defined(LOCK_TCPIP_CORE)
+    LOCK_TCPIP_CORE();
+#endif
     err_t err = dns_gethostbyname(hostname, &current->_raw_addr, _dns_callback, callback_state.get());
+#if defined(UNLOCK_TCPIP_CORE)
+    UNLOCK_TCPIP_CORE();
+#endif
     if (err == ERR_OK) {
       current->_status = result::Success; // result already in cache
     } else if (err == ERR_INPROGRESS) {
