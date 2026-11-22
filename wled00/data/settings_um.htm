@@ -50,7 +50,6 @@
 				d.a_pins = []; // analog pins array
 			}, ()=>{
 				if (d.um_p[0]==-1) d.um_p.shift();	// remove filler
-				d.Sf.SDA.max = d.Sf.SCL.max = d.Sf.MOSI.max = d.Sf.SCLK.max = d.Sf.MISO.max = d.max_gpio;
 				fetchPinInfo(pinDD); // load pin occupancy, then convert INPUT to SELECT for pins
 			});	// If we set async false, file is loaded and executed, then next statement is processed
 		})
@@ -134,7 +133,7 @@
 	}
 	function pinDD() {
 		for (let i of d.Sf.elements) {
-			if (i.type === "number" && (i.name.includes("pin") || ["SDA","SCL","MOSI","MISO","SCLK"].includes(i.name))) { //select all pin select elements
+			if (i.type === "number" && i.name.includes("pin")) { //select all pin select elements
 				let v = parseInt(i.value);
 				let sel = addDD(i.name,0);
 				if (!sel) continue;
@@ -366,20 +365,6 @@
 		<span id="lserr" style="color:red; display:none">&#9888; Could not load configuration.</span><hr>
 		</div>
 		<h2>Usermod Setup</h2>
-		<div class="sec">
-			<h3>Global I<sup>2</sup>C & SPI</h3>
-			
-			<b>I<sup>2</sup>C GPIOs (HW)</b><br>
-			SDA:<input type="number" min="-1" max="48" name="SDA" onchange="check(this,'if')" class="s" placeholder="SDA">
-			SCL:<input type="number" min="-1" max="48" name="SCL" onchange="check(this,'if')" class="s" placeholder="SCL"><br>
-			<br><b>SPI GPIOs (HW)</b><br>
-			<i class="warn">only changable on ESP32</i><br>
-			MOSI:<input type="number" min="-1" max="48" name="MOSI" onchange="check(this,'if')" class="s" placeholder="MOSI">
-			MISO:<input type="number" min="-1" max="48" name="MISO" onchange="check(this,'if')" class="s" placeholder="MISO">
-			SCLK:<input type="number" min="-1" max="48" name="SCLK" onchange="check(this,'if')" class="s" placeholder="SCLK"><br>
-			<br><i class="warn">change requires reboot!</i><br>
-			Reboot after save? <input type="checkbox" name="RBT">
-		</div>
 		<div id="um">Loading settings...</div>
 		<hr><button type="button" onclick="B()">Back</button><button type="submit">Save</button>
 	</form>
