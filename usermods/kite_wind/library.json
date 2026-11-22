@@ -1,0 +1,5 @@
+{
+  "name": "kite_wind",
+  "build": { "libArchive": false },
+  "dependencies": {}
+}
