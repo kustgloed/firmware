@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: EUPL-1.2
+# Copyright (c) 2026 Chura IT Consultancy (Kustgloed)
+# Kite Wind Map ESP32-S3 N16R8 (16 MiB flash): two 4 MiB OTA slots, 2 MiB LittleFS.
+# Name,    Type, SubType,  Offset,   Size,     Flags
+nvs,       data, nvs,      0x9000,   0x5000,
+otadata,   data, ota,      0xe000,   0x2000,
+app0,      app,  ota_0,    0x10000,  0x400000,
+app1,      app,  ota_1,    0x410000, 0x400000,
+spiffs,    data, spiffs,   0x810000, 0x200000,
+coredump,  data, coredump, 0xa10000, 0x10000,
+prov,      data, nvs,      0xa20000, 0x10000,
+# 0xa30000-0xffffff (0x5d0000, 5.8 MiB) unallocated: alignment, recovery, future use.
