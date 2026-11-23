@@ -253,17 +253,17 @@ static void testSizes(const std::string& headers) {
   assert(widestSmall.size() + headers.size() + 1 <= responseCapacity(4));
   constexpr size_t EDGE_HEADER_ALLOWANCE = 400;
   assert(widestSmall.size() + EDGE_HEADER_ALLOWANCE + 1 <= responseCapacity(4));
-  // Worst-case request through the shared format: 127-byte host, five-digit port, 256-byte key.
+  // Worst-case request through the shared format: 127-byte host, five-digit port, 256-byte key, 64-byte version.
   std::string ids;
   for (size_t i = 0; i < MAX_SPOTS; i++) ids += std::string(i ? "," : "") + IDS[i];
-  const std::string host(MAX_HOST_LENGTH, 'h'), key(MAX_KEY_LENGTH, 'k');
+  const std::string host(MAX_HOST_LENGTH, 'h'), key(MAX_KEY_LENGTH, 'k'), version(MAX_VERSION_LENGTH, 'v');
   std::vector<char> request(requestBytes(MAX_SPOTS) + 64);
-  int written = std::snprintf(request.data(), request.size(), REQUEST_FORMAT, ids.c_str(), '1', host.c_str(), 65535u, key.c_str(), "keep-alive");
+  int written = std::snprintf(request.data(), request.size(), REQUEST_FORMAT, ids.c_str(), '1', host.c_str(), 65535u, key.c_str(), version.c_str(), "keep-alive");
   assert(written > 0 && std::strlen(request.data()) == static_cast<size_t>(written));
   assert(std::strstr(request.data(), "Bearer kkk") && std::strstr(request.data(), ":65535\r\n"));
   assert(static_cast<size_t>(written) + 1 == requestBytes(MAX_SPOTS));
   assert(requestBytes(MAX_SPOTS) <= requestCapacity(MAX_SPOTS));
-  assert(requestBytes(4) <= requestCapacity(4) && requestCapacity(4) == 704 && responseCapacity(4) == 2304);
+  assert(requestBytes(4) <= requestCapacity(4) && requestCapacity(4) == 832 && responseCapacity(4) == 2304);
   assert(requestCapacity(MAX_SPOTS) == 2560 && responseCapacity(MAX_SPOTS) == 16384);
   assert(REQUEST_CAPACITY == requestCapacity(BATCH_SIZE) && RESPONSE_CAPACITY == responseCapacity(BATCH_SIZE));
   std::printf("Widest 4-result body %zu; widest 51-result body %zu, +25%% %zu, edge headers %zu, buffer need %zu of %zu; request %zu of %zu.\n",

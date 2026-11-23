@@ -105,7 +105,19 @@ def check_image(image, primary):
     return len(raw), digest, hits
 
 
+def source_identity():
+    commit = os.environ.get("KITE_FW_COMMIT", "")
+    epoch = os.environ.get("SOURCE_DATE_EPOCH", "")
+    if not re.fullmatch(r"[0-9a-f]{7,40}", commit) or not sys.argv[1].startswith(commit):
+        raise RuntimeError("KITE_FW_COMMIT must name the source commit (run.sh sets it)")
+    if not re.fullmatch(r"[0-9]{1,10}", epoch):
+        raise RuntimeError("SOURCE_DATE_EPOCH must be the commit time (run.sh sets it)")
+    return commit, epoch
+
+
 def build_and_scan(report):
+    commit, epoch = source_identity()
+    print(f"Source date epoch {epoch}", file=report)
     prepare_source()
     Path.home().mkdir(parents=True, exist_ok=True)
     venv.create(VENV, with_pip=True)
@@ -114,6 +126,11 @@ def build_and_scan(report):
     logged("npm", "npm", "ci", "--no-audit", "--no-fund")
     logged("ui-build", "npm", "run", "build")
     logged("ui-tests", "npm", "test")
+    # Fails when the source date is within 18 months of the trust anchor end.
+    cert_test = Path("/work/kite-wind-cert-test")
+    logged("cert-test-build", "c++", "-std=c++11", "-Wall", "-Wextra", "-Werror",
+           "tools/kite-wind-cert-test.cpp", "-o", str(cert_test))
+    logged("cert-test", str(cert_test))
     if not Path("wled00/html_ui.h").is_file() or Path("wled00/my_config.h").exists():
         raise RuntimeError("UI generation did not complete with clean configuration")
 
@@ -123,6 +140,8 @@ def build_and_scan(report):
         print(f"Building {profile}", flush=True)
         logged(profile, "pio", "run", "-v", "-j", "4", "-e", profile)
         total = verify_compiler_flags(profile)
+        if profile == "kite_c3" and f"+{commit}.kite_c3, build epoch {epoch}" not in (OUTPUT / "kite_c3.log").read_text(errors="replace"):
+            raise RuntimeError("kite_c3: firmware version or build epoch missing from the build log")
         print(f"{profile}: {total} C/C++ commands contain all four map arguments", file=report)
         primary = Path("build_output/release") / f"WLED_{version}_{release_name}.bin"
         if not primary.is_file():

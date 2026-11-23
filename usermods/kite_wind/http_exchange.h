@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include "cert_dates.h"
 #include "display_contract.h"
 #include "poll_policy.h"
 #include "system_status.h"
@@ -22,7 +23,7 @@ constexpr uint32_t IO_WINDOW_MS = 8000;          // longest read or write stall 
 constexpr uint32_t DEADLINE_MS = 20000;          // end-to-end acceptance deadline per exchange
 constexpr int TLS_CERT_VERIFY_FAILED = -0x2700;  // MBEDTLS_ERR_X509_CERT_VERIFY_FAILED
 constexpr uint8_t NTP_TIME_SOURCE = 150;         // TOKI_TS_NTP
-constexpr uint32_t MIN_VALID_UTC = 1767225600;   // 2026-01-01T00:00:00Z
+constexpr uint32_t MIN_VALID_UTC = KiteWindCert::MIN_VALID_UTC; // 2026-01-01 or the build epoch, if later
 constexpr uint32_t CLOCK_TOLERANCE_S = 60;
 
 // Free internal heap and largest block required before a TLS handshake (Task 0 gate result).
@@ -48,11 +49,22 @@ inline bool pastDeadline(uint32_t start, uint32_t now) { return static_cast<uint
 constexpr uint32_t CYCLE_DEADLINE_MS = 60000;
 inline bool cycleExpired(uint32_t start, uint32_t now) { return static_cast<uint32_t>(now - start) >= CYCLE_DEADLINE_MS; }
 
+// Firmware version token: 1 to MAX_VERSION_LENGTH characters of [0-9A-Za-z._+-]. constexpr (C++11 form) so a
+// build define can be checked by static_assert.
+constexpr size_t MAX_VERSION_LENGTH = KiteWindDisplay::MAX_VERSION_LENGTH;
+constexpr bool versionChar(char c) {
+  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' || c == '_' || c == '+' || c == '-';
+}
+constexpr bool versionFrom(const char* v, size_t n) {
+  return !v[n] ? n > 0 : n < MAX_VERSION_LENGTH && versionChar(v[n]) && versionFrom(v, n + 1);
+}
+constexpr bool validVersion(const char* v) { return v && versionFrom(v, 0); }
+
 // Joins ids with commas in scratch, then formats REQUEST_FORMAT into out.
-// Returns the request length, or 0 when any part would be truncated.
+// Returns the request length, or 0 when any part would be truncated or the version is invalid.
 inline size_t buildRequest(char* out, size_t outCap, char* scratch, size_t scratchCap, const char* const* ids, size_t count,
-                           const char* host, unsigned port, const char* key, Framing framing = Framing::Http10Close) {
-  if (!out || !scratch || !outCap || !scratchCap || !count) return 0;
+                           const char* host, unsigned port, const char* key, Framing framing, const char* version) {
+  if (!out || !scratch || !outCap || !scratchCap || !count || !validVersion(version)) return 0;
   size_t used = 0;
   for (size_t i = 0; i < count; i++) {
     int written = snprintf(scratch + used, scratchCap - used, "%s%s", i ? "," : "", ids[i]);
@@ -61,7 +73,7 @@ inline size_t buildRequest(char* out, size_t outCap, char* scratch, size_t scrat
   }
   const char minor = framing == Framing::Http10Close ? '0' : '1';
   const char* connection = framing == Framing::Http11KeepAlive ? "keep-alive" : "close";
-  int written = snprintf(out, outCap, KiteWindDisplay::REQUEST_FORMAT, scratch, minor, host, port, key, connection);
+  int written = snprintf(out, outCap, KiteWindDisplay::REQUEST_FORMAT, scratch, minor, host, port, key, version, connection);
   if (written <= 0 || static_cast<size_t>(written) >= outCap) return 0;
   return written;
 }
@@ -214,14 +226,13 @@ inline uint32_t clockDistance(uint32_t tokiUtc, int64_t systemUtc) {
 }
 
 // True when WLED holds NTP time but the system clock disagrees.
-// Accepted gap: the pinned S3 mbedTLS lacks MBEDTLS_HAVE_TIME_DATE (probe: x509_time_check=0), so
-// certificate dates are not checked; the clock gate only delays HTTPS until time is plausible.
+// The pinned mbedTLS lacks MBEDTLS_HAVE_TIME_DATE, so cert_dates.h checks certificate dates against this clock.
 inline bool clockNeedsSync(uint8_t tokiSource, uint32_t tokiUtc, int64_t systemUtc) {
   if (tokiSource < NTP_TIME_SOURCE || tokiUtc < MIN_VALID_UTC) return false;
   return systemUtc < MIN_VALID_UTC || clockDistance(tokiUtc, systemUtc) > CLOCK_TOLERANCE_S;
 }
 
-// HTTPS waits for NTP time in Toki and a matching system clock (plausibility only, see above).
+// HTTPS waits for NTP time in Toki and a matching system clock, both at or after the floor.
 inline bool clockUsable(uint8_t tokiSource, uint32_t tokiUtc, int64_t systemUtc) {
   return tokiSource >= NTP_TIME_SOURCE && tokiUtc >= MIN_VALID_UTC && systemUtc >= MIN_VALID_UTC
     && clockDistance(tokiUtc, systemUtc) <= CLOCK_TOLERANCE_S;

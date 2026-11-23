@@ -12,6 +12,9 @@ fi
 tools_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$tools_dir/../.." && pwd)"
 revision="$(git -C "$repo" rev-parse --verify --end-of-options "${2:-HEAD}^{commit}")"
+# The archive has no history: pass the version commit and the clock floor (commit time) automatically.
+commit="$(git -C "$repo" rev-parse --short=7 "$revision")"
+epoch="$(git -C "$repo" log -1 --format=%ct "$revision")"
 mkdir -p -- "$1"
 out="$(cd "$1" && pwd)"
 if [[ -n "$(ls -A -- "$out")" ]]; then
@@ -26,6 +29,7 @@ chmod a+r "$scratch/source.tar"
 
 docker build --platform linux/arm64 --iidfile "$scratch/image-id" "$tools_dir"
 docker run --rm --platform linux/arm64 --user "$(id -u):$(id -g)" \
+    --env "KITE_FW_COMMIT=$commit" --env "SOURCE_DATE_EPOCH=$epoch" \
     --mount "type=bind,source=$scratch/source.tar,target=/input/source.tar,readonly" \
     --mount "type=bind,source=$out,target=/out" \
     "$(cat "$scratch/image-id")" "$revision"
