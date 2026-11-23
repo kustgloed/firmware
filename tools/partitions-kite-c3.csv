@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: EUPL-1.2
+# Copyright (c) 2026 Chura IT Consultancy (Kustgloed)
+# Kite Wind Map ESP32-C3 (4 MiB flash): two 1.875 MiB OTA slots, 192 KiB LittleFS.
+# Name,    Type, SubType,  Offset,   Size,     Flags
+nvs,       data, nvs,      0x9000,   0x5000,
+otadata,   data, ota,      0xe000,   0x2000,
+app0,      app,  ota_0,    0x10000,  0x1E0000,
+app1,      app,  ota_1,    0x1F0000, 0x1E0000,
+spiffs,    data, spiffs,   0x3D0000, 0x30000,
+# Table ends at 0x400000 (end of flash); no free space remains.

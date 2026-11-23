@@ -25,13 +25,33 @@ constexpr uint8_t NTP_TIME_SOURCE = 150;         // TOKI_TS_NTP
 constexpr uint32_t MIN_VALID_UTC = 1767225600;   // 2026-01-01T00:00:00Z
 constexpr uint32_t CLOCK_TOLERANCE_S = 60;
 
+// Free internal heap and largest block required before a TLS handshake (Task 0 gate result).
+constexpr uint32_t MIN_FREE_HEAP_BYTES = 40960;
+constexpr uint32_t MIN_LARGEST_BLOCK_BYTES = 20480;
+inline bool heapSufficient(uint32_t freeBytes, uint32_t largestBlock) {
+  return freeBytes >= MIN_FREE_HEAP_BYTES && largestBlock >= MIN_LARGEST_BLOCK_BYTES;
+}
+
+// Request framing: close-delimited HTTP/1.0 unless the worker sends several batches over one TLS session.
+// Plain HTTP reads to close, so keep-alive is only valid on a TLS session that ends replies by Content-Length.
+enum class Framing : uint8_t { Http10Close, Http11KeepAlive, Http11Close };
+
+inline Framing framingFor(bool tlsSession, size_t offset, size_t batch, size_t selected) {
+  if (!tlsSession || (offset == 0 && batch >= selected)) return Framing::Http10Close;
+  return offset + batch < selected ? Framing::Http11KeepAlive : Framing::Http11Close;
+}
+
 // True once an exchange started at start has used the whole acceptance deadline; rollover safe.
 inline bool pastDeadline(uint32_t start, uint32_t now) { return static_cast<uint32_t>(now - start) >= DEADLINE_MS; }
+
+// Stall cap for a multi-batch cycle: no batch finished for this long; a stalled cycle is discarded, never merged later. Rollover safe.
+constexpr uint32_t CYCLE_DEADLINE_MS = 60000;
+inline bool cycleExpired(uint32_t start, uint32_t now) { return static_cast<uint32_t>(now - start) >= CYCLE_DEADLINE_MS; }
 
 // Joins ids with commas in scratch, then formats REQUEST_FORMAT into out.
 // Returns the request length, or 0 when any part would be truncated.
 inline size_t buildRequest(char* out, size_t outCap, char* scratch, size_t scratchCap, const char* const* ids, size_t count,
-                           const char* host, unsigned port, const char* key) {
+                           const char* host, unsigned port, const char* key, Framing framing = Framing::Http10Close) {
   if (!out || !scratch || !outCap || !scratchCap || !count) return 0;
   size_t used = 0;
   for (size_t i = 0; i < count; i++) {
@@ -39,7 +59,9 @@ inline size_t buildRequest(char* out, size_t outCap, char* scratch, size_t scrat
     if (written < 0 || static_cast<size_t>(written) >= scratchCap - used) return 0;
     used += written;
   }
-  int written = snprintf(out, outCap, KiteWindDisplay::REQUEST_FORMAT, scratch, host, port, key);
+  const char minor = framing == Framing::Http10Close ? '0' : '1';
+  const char* connection = framing == Framing::Http11KeepAlive ? "keep-alive" : "close";
+  int written = snprintf(out, outCap, KiteWindDisplay::REQUEST_FORMAT, scratch, minor, host, port, key, connection);
   if (written <= 0 || static_cast<size_t>(written) >= outCap) return 0;
   return written;
 }
@@ -60,6 +82,54 @@ struct Head {
   char* body = nullptr;
   size_t bodyLength = 0;
 };
+
+enum class Progress : uint8_t { Incomplete, Complete, Invalid };
+
+// Content-Length framing for a reply that is still arriving (data is not NUL-terminated).
+// Complete once the declared body has fully arrived. Without Content-Length the reply stays
+// Incomplete and the caller reads to close. Chunked, bad, conflicting or excess bytes are Invalid.
+inline Progress responseProgress(const char* data, size_t length) {
+  size_t end = 0;
+  bool found = false;
+  for (size_t i = 0; i + 3 < length; i++) {
+    if (data[i] == '\r' && data[i + 1] == '\n' && data[i + 2] == '\r' && data[i + 3] == '\n') {
+      end = i;
+      found = true;
+      break;
+    }
+  }
+  if (!found) return Progress::Incomplete;
+  size_t line = 0;
+  while (line < end && !(data[line] == '\r' && data[line + 1] == '\n')) line++;
+  line += 2;
+  bool hasLength = false;
+  size_t declared = 0;
+  while (line < end + 2) {
+    size_t stop = line;
+    while (stop < end && !(data[stop] == '\r' && data[stop + 1] == '\n')) stop++;
+    size_t colon = line;
+    while (colon < stop && data[colon] != ':') colon++;
+    if (colon == stop || colon == line) return Progress::Invalid;
+    if (detail::nameIs(data + line, colon - line, "transfer-encoding")) return Progress::Invalid;
+    if (detail::nameIs(data + line, colon - line, "content-length")) {
+      size_t i = colon + 1;
+      while (i < stop && (data[i] == ' ' || data[i] == '\t')) i++;
+      size_t value = 0, digits = 0;
+      while (i < stop && detail::digit(data[i])) {
+        if (++digits > 9) return Progress::Invalid;
+        value = value * 10 + static_cast<size_t>(data[i++] - '0');
+      }
+      while (i < stop && (data[i] == ' ' || data[i] == '\t')) i++;
+      if (!digits || i != stop || (hasLength && value != declared)) return Progress::Invalid;
+      hasLength = true;
+      declared = value;
+    }
+    line = stop + 2;
+  }
+  if (!hasLength) return Progress::Incomplete;
+  size_t have = length - (end + 4);
+  return have < declared ? Progress::Incomplete : have == declared ? Progress::Complete : Progress::Invalid;
+}
 
 // Validates the status line and headers of a complete close-delimited reply.
 // response holds length bytes plus a NUL. Rejects chunked or mismatched bodies and embedded NULs.
@@ -164,6 +234,8 @@ struct Schedule {
   unsigned failures = 0;
   bool due(uint32_t now) const { return static_cast<uint32_t>(now - base) >= delay; }
   void reset(uint32_t now) { base = now; delay = 0; failures = 0; }
+  // The next batch of the same cycle starts at once; failures survive until succeeded() so backoff escalates.
+  void continueCycle(uint32_t now) { base = now; delay = 0; }
   void succeeded(uint32_t now) { base = now; failures = 0; delay = KiteWindPoll::retryDelayMs(0, false); }
   void failed(uint32_t now) {
     base = now;

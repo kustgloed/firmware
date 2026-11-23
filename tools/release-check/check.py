@@ -21,6 +21,7 @@ CORE = Path("/opt/platformio")
 PROFILES = {
     "kite": "ESP8266",
     "kite_s3": "ESP32-S3_16MB_opi",
+    "kite_c3": "ESP32-C3",
     "esp32dev": "ESP32",
 }
 PREFIX_FLAGS = [
@@ -29,7 +30,7 @@ PREFIX_FLAGS = [
     for kind in ("ffile", "fmacro")
 ]
 LOCAL_PATH = re.compile(rb"/(?:Users|home)(?=/|[\x00\t\r\n ]|$)")
-COMPILER = re.compile(r"^\s*(?:\S*/)?(?:xtensa[-\w]*-)?(?:gcc|g\+\+)\s")
+COMPILER = re.compile(r"^\s*(?:\S*/)?(?:(?:xtensa|riscv32)[-\w]*-)?(?:gcc|g\+\+)\s")
 SOURCE_FILE = re.compile(r"\.(?:c|cc|cpp|cxx)(?:\s|$)")
 
 
@@ -69,6 +70,7 @@ def prepare_source():
     base_flags = {
         "kite": override["env:kite"]["build_flags"],
         "kite_s3": "${env:esp32s3dev_16MB_opi.build_flags}",
+        "kite_c3": override["env:kite_c3"]["build_flags"],
         "esp32dev": upstream["env:esp32dev"]["build_flags"],
     }
     for profile, flags in base_flags.items():

@@ -43,16 +43,16 @@ static void testRequestBuilder() {
   assert(request.find(ids[50]) != std::string::npos && request.find(ids[50] + ",") == std::string::npos);
   // Widest host and key still fit; one byte less of either buffer refuses the request.
   const std::string host(KiteWindDisplay::MAX_HOST_LENGTH, 'h'), key(KiteWindDisplay::MAX_KEY_LENGTH, 'k');
-  length = buildRequest(out.data(), out.size(), scratch.data(), scratch.size(), pointers, MAX_SPOTS, host.c_str(), 65535, key.c_str());
+  length = buildRequest(out.data(), out.size(), scratch.data(), scratch.size(), pointers, MAX_SPOTS, host.c_str(), 65535, key.c_str(), Framing::Http11KeepAlive);
   assert(length + 1 == KiteWindDisplay::requestBytes(MAX_SPOTS) && length < out.size());
-  assert(!buildRequest(out.data(), length, scratch.data(), scratch.size(), pointers, MAX_SPOTS, host.c_str(), 65535, key.c_str()));
-  assert(buildRequest(out.data(), length + 1, scratch.data(), scratch.size(), pointers, MAX_SPOTS, host.c_str(), 65535, key.c_str()));
+  assert(!buildRequest(out.data(), length, scratch.data(), scratch.size(), pointers, MAX_SPOTS, host.c_str(), 65535, key.c_str(), Framing::Http11KeepAlive));
+  assert(buildRequest(out.data(), length + 1, scratch.data(), scratch.size(), pointers, MAX_SPOTS, host.c_str(), 65535, key.c_str(), Framing::Http11KeepAlive));
   assert(!buildRequest(out.data(), out.size(), scratch.data(), 1886, pointers, MAX_SPOTS, "h", 1, "k"));
   assert(buildRequest(out.data(), out.size(), scratch.data(), 1887, pointers, MAX_SPOTS, "h", 1, "k"));
   assert(!buildRequest(out.data(), out.size(), scratch.data(), scratch.size(), pointers, 0, "h", 1, "k"));
   // Four-spot LAN batch fits the small buffers.
   std::vector<char> small(KiteWindDisplay::requestCapacity(4));
-  assert(buildRequest(small.data(), small.size(), scratch.data(), scratch.size(), pointers, 4, host.c_str(), 65535, key.c_str()));
+  assert(buildRequest(small.data(), small.size(), scratch.data(), scratch.size(), pointers, 4, host.c_str(), 65535, key.c_str(), Framing::Http11KeepAlive));
 }
 
 static bool head(const std::string& text, Head& out) {
@@ -178,6 +178,15 @@ static void testDeadline() {
   assert(!pastDeadline(start, start));
 }
 
+// Multi-batch cycle age cap, including millis() rollover.
+static void testCycleExpired() {
+  assert(!cycleExpired(0, CYCLE_DEADLINE_MS - 1) && cycleExpired(0, CYCLE_DEADLINE_MS) && cycleExpired(0, CYCLE_DEADLINE_MS + 1));
+  const uint32_t start = 0xffff8000u; // 60 s later wraps past zero
+  assert(!cycleExpired(start, start) && !cycleExpired(start, start + CYCLE_DEADLINE_MS - 1));
+  assert(cycleExpired(start, start + CYCLE_DEADLINE_MS) && static_cast<uint32_t>(start + CYCLE_DEADLINE_MS) < start);
+  assert(CYCLE_DEADLINE_MS > DEADLINE_MS);
+}
+
 static void testHold() {
   bool held = true;
   const uint32_t last = 0xfffff000u;
@@ -189,6 +198,76 @@ static void testHold() {
   assert(!expireHeld(held, 0, 59999, 60000) && expireHeld(held, 0, 60000, 60000)); // LAN stale threshold
 }
 
+static void testFraming() {
+  // Non-worker targets and single-batch cycles stay close-delimited HTTP/1.0.
+  assert(framingFor(false, 0, 4, 51) == Framing::Http10Close);
+  assert(framingFor(true, 0, 51, 51) == Framing::Http10Close);
+  assert(framingFor(true, 0, 4, 4) == Framing::Http10Close);
+  // Multi-batch worker cycle: keep-alive until the last batch, which closes.
+  assert(framingFor(true, 0, 4, 51) == Framing::Http11KeepAlive);
+  assert(framingFor(true, 44, 4, 51) == Framing::Http11KeepAlive);
+  assert(framingFor(true, 48, 3, 51) == Framing::Http11Close);
+}
+
+static void testRequestFraming() {
+  std::vector<std::string> ids = uuids(4);
+  const char* pointers[4] = {ids[0].c_str(), ids[1].c_str(), ids[2].c_str(), ids[3].c_str()};
+  std::vector<char> out(KiteWindDisplay::requestCapacity(4)), scratch(KiteWindDisplay::responseCapacity(4));
+  assert(buildRequest(out.data(), out.size(), scratch.data(), scratch.size(), pointers, 4, "api.kustgloed.nl", 443, "k",
+                      Framing::Http11KeepAlive));
+  std::string keep(out.data());
+  assert(keep.find(" HTTP/1.1\r\n") != std::string::npos);
+  assert(keep.find("\r\nConnection: keep-alive\r\n\r\n") != std::string::npos);
+  assert(buildRequest(out.data(), out.size(), scratch.data(), scratch.size(), pointers, 4, "api.kustgloed.nl", 443, "k",
+                      Framing::Http11Close));
+  std::string closing(out.data());
+  assert(closing.find(" HTTP/1.1\r\n") != std::string::npos);
+  assert(closing.find("\r\nConnection: close\r\n\r\n") != std::string::npos);
+  assert(buildRequest(out.data(), out.size(), scratch.data(), scratch.size(), pointers, 4, "api.kustgloed.nl", 443, "k"));
+  std::string legacy(out.data());
+  assert(legacy.find(" HTTP/1.0\r\n") != std::string::npos);
+  assert(legacy.find("\r\nConnection: close\r\n\r\n") != std::string::npos);
+}
+
+static void testResponseProgress() {
+  const std::string head = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n";
+  auto progress = [](const std::string& text) { return responseProgress(text.data(), text.size()); };
+  assert(progress("HTTP/1.1 200 OK\r\nContent-Le") == Progress::Incomplete);
+  assert(progress(head + "Content-Length: 5\r\n\r\n12") == Progress::Incomplete);
+  assert(progress(head + "Content-Length: 5\r\n\r\n12345") == Progress::Complete);
+  assert(progress(head + "content-length: 0\r\n\r\n") == Progress::Complete);
+  assert(progress(head + "Content-Length: 5\r\n\r\n123456") == Progress::Invalid);      // extra bytes
+  assert(progress(head + "Content-Length: 5\r\nContent-Length: 6\r\n\r\n") == Progress::Invalid);
+  assert(progress(head + "Content-Length: 5\r\nContent-Length: 5\r\n\r\n12345") == Progress::Complete);
+  assert(progress(head + "Content-Length: x\r\n\r\n") == Progress::Invalid);
+  assert(progress(head + "Content-Length: 1234567890\r\n\r\n") == Progress::Invalid);   // more than nine digits
+  assert(progress(head + "Transfer-Encoding: chunked\r\n\r\n5\r\n12345\r\n0\r\n\r\n") == Progress::Invalid);
+  assert(progress(head + "\r\n12345") == Progress::Incomplete);                          // no length: read to close
+  assert(progress("HTTP/1.1 200 OK\r\n\r\n") == Progress::Incomplete);
+  assert(progress(head + "Content-Length: 999999999\r\n\r\n") == Progress::Incomplete);  // nine digits
+  assert(progress(head + "Content-Length:\r\n\r\n") == Progress::Invalid);              // empty value
+  assert(progress(head + "NoColonHeader\r\n\r\n") == Progress::Invalid);
+  assert(progress(head + "Content-Length:  5 \r\n\r\n12345") == Progress::Complete);    // padded value
+}
+
+static void testHeapGuard() {
+  assert(heapSufficient(MIN_FREE_HEAP_BYTES, MIN_LARGEST_BLOCK_BYTES));
+  assert(!heapSufficient(MIN_FREE_HEAP_BYTES - 1, MIN_LARGEST_BLOCK_BYTES));
+  assert(!heapSufficient(MIN_FREE_HEAP_BYTES, MIN_LARGEST_BLOCK_BYTES - 1));
+}
+
+static void testContinueCycle() {
+  Schedule s;
+  s.failed(1000);
+  s.continueCycle(5000);
+  assert(s.failures == 1 && s.delay == 0 && s.due(5000));
+  s.failed(6000);
+  assert(s.failures == 2 && s.delay == KiteWindPoll::retryDelayMs(2, false) && s.delay == 60000);
+  s.succeeded(7000);
+  assert(s.failures == 0);
+  assert(!s.due(7000 + KiteWindPoll::POLL_INTERVAL_MS - 1) && s.due(7000 + KiteWindPoll::POLL_INTERVAL_MS));
+}
+
 int main() {
   testRequestBuilder();
   testHead();
@@ -196,7 +275,13 @@ int main() {
   testClock();
   testSchedule();
   testDeadline();
+  testCycleExpired();
   testHold();
+  testFraming();
+  testRequestFraming();
+  testResponseProgress();
+  testHeapGuard();
+  testContinueCycle();
   std::puts("kite wind HTTP exchange tests passed");
   return 0;
 }

@@ -17,9 +17,10 @@ The base is the upstream **development snapshot 17.0.0-devV5**, pinned to
 | `tools/kite-wind-poll-policy-test.cpp` | Checks poll timing and host classification. |
 | `tools/kite-wind-render-test.cpp` | Checks the render contract parser and player. |
 | `tools/kite-wind-status-test.cpp` | Checks system lamp blink timing. |
-| `tools/release-check/` | Builds and scans packaged release images in a clean container for all three supported boards. |
+| `tools/release-check/` | Builds and scans packaged release images in a clean container for all four supported boards. |
 | `tools/partitions-kite-s3.csv` | Supplies the existing ESP32-S3 flash partition layout. |
-| `platformio_override.sample.ini` | Preserves the upstream examples and adds the three Kustgloed board environments. |
+| `tools/partitions-kite-c3.csv` | Supplies the ESP32-C3 flash partition layout. |
+| `platformio_override.sample.ini` | Preserves the upstream examples and adds the four Kustgloed board environments. |
 | `wled00/asyncDNS.h` | Holds the lwIP core lock during DNS calls where core locking is enabled. |
 | `wled00/cfg.cpp` | Invokes the usermod hooks during protected configuration load and save, and clears the save flag before the write so a change made during a save is not lost. |
 | `wled00/fcn_declare.h` | Declares the protected configuration hooks. |

@@ -28,17 +28,17 @@ static_assert(BATCH_SIZE >= 1 && BATCH_SIZE <= MAX_SPOTS, "batch must fit the sp
 constexpr size_t UUID_LENGTH = 36;
 constexpr size_t MAX_HOST_LENGTH = 127;
 constexpr size_t MAX_KEY_LENGTH = 256;
-// Request framing used by prepareRequest(): spot IDs, host, port, key.
-constexpr char REQUEST_FORMAT[] = "GET /api/v1/led-conditions?spotIds=%s HTTP/1.0\r\nHost: %s:%u\r\n"
-  "Authorization: Bearer %s\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n";
+// Request framing used by prepareRequest(): spot IDs, HTTP minor version, host, port, key, connection token.
+constexpr char REQUEST_FORMAT[] = "GET /api/v1/led-conditions?spotIds=%s HTTP/1.%c\r\nHost: %s:%u\r\n"
+  "Authorization: Bearer %s\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: %s\r\n\r\n";
 constexpr size_t conversions(const char* text) {
   return !*text ? 0 : (*text == '%') + conversions(text + 1);
 }
 // Update requestBytes() whenever the conversions change.
-static_assert(conversions(REQUEST_FORMAT) == 4, "request format arguments changed");
-// Worst-case request: full batch, 127-byte host, five-digit port, 256-byte key, plus NUL.
+static_assert(conversions(REQUEST_FORMAT) == 6, "request format arguments changed");
+// Worst-case request: full batch, 127-byte host, five-digit port, 256-byte key, "keep-alive", plus NUL.
 constexpr size_t requestBytes(size_t batch) {
-  return sizeof(REQUEST_FORMAT) - 1 - 4 * 2 + batch * (UUID_LENGTH + 1) - 1 + MAX_HOST_LENGTH + 5 + MAX_KEY_LENGTH + 1;
+  return sizeof(REQUEST_FORMAT) - 1 - 6 * 2 + batch * (UUID_LENGTH + 1) - 1 + MAX_HOST_LENGTH + 5 + MAX_KEY_LENGTH + 1 + 1 + 10;
 }
 // Buffers include headers and the parser NUL; tests check the widest contract fits.
 constexpr size_t requestCapacity(size_t batch) { return batch <= 4 ? 704 : 2560; }

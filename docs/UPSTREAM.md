@@ -15,7 +15,7 @@ Select an upstream release tag and inspect it before merging. If the
    `git merge --no-ff <tag>`. Resolve differences while preserving the
    controller behavior documented in [CHANGES.md](../CHANGES.md).
 3. Repeat the clean build procedure in [README.md](../README.md) for
-   `kite`, `kite_s3`, and `esp32dev`. Run the existing UI and native tests.
+   `kite`, `kite_s3`, `kite_c3`, and `esp32dev`. Run the existing UI and native tests.
 4. Update [NOTICE.md](../NOTICE.md) with the upstream version and commit.
    Update [CHANGES.md](../CHANGES.md) from the diff against the new base.
    Refresh the dependency pins and terms in [THIRD-PARTY.md](THIRD-PARTY.md).

@@ -48,14 +48,14 @@ Physical pixel 0 (the first lamp) shows solid green after a complete successful 
 | 4 | API rejects credentials (HTTP 401/403) |
 | 5 | Other non-200 HTTP response (not 400, 401, 403, 404, or 5xx) |
 | 6 | Invalid, incomplete, oversized, or unexpected API response |
-| 7 | Last complete weather data is stale: 60 seconds old on ESP8266 and other builds, 30 minutes on ESP32-S3 |
+| 7 | Last complete weather data is stale: 60 seconds old on ESP8266 and other builds, 30 minutes on ESP32-S3 and ESP32-C3 |
 | 8 | API responds, but weather data is unavailable (`UNKNOWN`) for one or more selected spots |
 | 9 | HTTP 404: a mapped spot UUID is missing from the server catalogue |
 | 10 | HTTP 400: the server rejects the request as invalid |
 | 11 | HTTP 5xx: server-side failure (for example database unavailable) |
 | 12 | TLS verification failed or system clock unusable for HTTPS |
 
-HTTPS (ESP32-S3, port 443) waits for WLED's own NTP time. Enable NTP in WLED's time settings; without it code 12 persists and no HTTPS poll starts.
+HTTPS (ESP32-S3 and ESP32-C3, port 443) waits for WLED's own NTP time. Enable NTP in WLED's time settings; without it code 12 persists and no HTTPS poll starts.
 
 Setup and network faults take priority. Otherwise the latest API error remains until a complete successful polling cycle; code 7 applies when no more specific API error exists. Valid `NONE` means known unsuitable conditions and remains healthy. `UNKNOWN` keeps that spot lamp off and reports code 8; known results for other spots still display normally. An empty weather cache therefore cannot show a green system lamp. The WLED info response exposes `Kite system blink code` and the spot capacity excluding pixel 0. Debug logs report changes to the numeric status code without connection settings or credentials. Disabling the usermod or a realtime override also suspends the status lamp.
 
@@ -91,19 +91,25 @@ Forecast lamps start a smooth fade together using the controller clock. Both def
 
 | Platform | Transport | Cadence |
 | --- | --- | --- |
-| ESP8266 and other builds | LAN HTTP, batches of four spots | Every 10 s; results older than 60 s turn the spot lamps off |
+| ESP8266 and classic ESP32 | LAN HTTP, batches of four spots | Every 10 s; results older than 60 s turn the spot lamps off |
 | ESP32-S3 with PSRAM | HTTPS on port 443 from a worker task, one batch of up to 51 spots | Every 10 min after a success; retries after 30 s, 1 min, 2 min, then every 5 min; HTTP 401 retries after 10 min |
+| ESP32-C3 (`kite_c3`) | HTTPS on port 443 from a worker task, batches of four over one keep-alive TLS session | Every 10 min after a success; retries after 30 s, 1 min, 2 min, then every 5 min; HTTP 401 retries after 10 min |
 
-- The S3 build pins the ISRG Root X1 certificate (`isrg_root_x1.h`) and refuses plain HTTP to a public host (code 3). Plain HTTP stays valid for LAN addresses and local names.
-- Builds without HTTPS refuse port 443.
+- The S3 and C3 builds pin the ISRG Root X1 certificate (`isrg_root_x1.h`) and refuse plain HTTP to a public host (code 3). Plain HTTP stays valid for LAN addresses and local names.
+- ESP8266 and other builds without HTTPS refuse port 443.
+- On the C3, plain HTTP also uses the worker. The C3 polls a LAN host every 10 minutes with a 30-minute hold. The 10-second client with a 60-second hold applies only to ESP8266 and classic ESP32 builds.
 - The hold timer keeps the last complete result for 30 minutes after the last success. The spot lamps keep the held result, then turn off. A failed poll shows its error code at once. A connection failure gives code 1.
-- The info panel (`/json/info`, section `u`) adds `Kite successful polls` on every build. S3 builds also report `Kite TLS errors`, `Kite worker stack free` (bytes) and `Kite min internal heap` (bytes).
+- The info panel (`/json/info`, section `u`) adds `Kite successful polls` on every build. S3 and C3 builds also report `Kite TLS errors`, `Kite TLS reuse` (cumulative requests that reused the TLS session since boot), `Kite worker stack free` (bytes) and `Kite min internal heap` (bytes).
 
 The details below describe the 10-second LAN client (ESP8266 and other builds) unless stated otherwise.
 
 Polling runs every ten seconds with an eight-second TCP request deadline. A timed-out TCP PCB is cancelled on its owning lwIP context; pending DNS must retire before request memory is reused. Invalid responses retain the last result for at most 60 seconds, then spot LEDs turn off. The info panel distinguishes simulated weather and shows response age. Disabling the usermod releases realtime LED ownership.
 
-Requests use `/api/v1/led-conditions` over HTTP/1.0 with close-delimited compact responses. Selected spots are fetched in batches of at most four, with a 2304-byte response and 704-byte request buffer. ESP32-S3 builds with PSRAM (`CONFIG_IDF_TARGET_ESP32S3` and `BOARD_HAS_PSRAM`) fetch up to 51 spots per batch with a 16384-byte response and 2560-byte request buffer; `-DKITE_WIND_BATCH_SIZE=<n>` overrides the size. The batch size is the transport size, not the number of spots displayed. All selected results are published together after a successful complete cycle. A failed batch discards that cycle and leaves the previous complete result to expire. Batches of four (ESP8266 and other targets) or 51 (ESP32-S3 with PSRAM) keep the response bounded while carrying the display configuration; other firmware targets reject batches above four at compile time. JSON parsing stays bounded on ESP8266 while supporting the full segment selection. Unexpected status codes, malformed JSON, missing/duplicate spot results, and unknown states do not replace the last valid result. LAN HTTP needs a trusted LAN. The ESP32-S3 build uses verified HTTPS for production. Device authentication stays enabled on the Java server.
+Requests use `/api/v1/led-conditions` over HTTP/1.0 with close-delimited compact responses on the LAN client and on single-batch worker cycles. Selected spots are fetched in batches of at most four, with a 2304-byte response and 704-byte request buffer. ESP32-S3 builds with PSRAM (`CONFIG_IDF_TARGET_ESP32S3` and `BOARD_HAS_PSRAM`) fetch up to 51 spots per batch with a 16384-byte response and 2560-byte request buffer; `-DKITE_WIND_BATCH_SIZE=<n>` overrides the size. The batch size is the transport size, not the number of spots displayed. All selected results are published together after a successful complete cycle. A failed batch discards that cycle and leaves the previous complete result to expire. Batches of four (ESP8266 and other targets) or 51 (ESP32-S3 with PSRAM) keep the response bounded while carrying the display configuration; other firmware targets, including the C3, reject batches above four at compile time. JSON parsing stays bounded on ESP8266 while supporting the full segment selection. Unexpected status codes, malformed JSON, missing/duplicate spot results, and unknown states do not replace the last valid result. LAN HTTP needs a trusted LAN. The ESP32-S3 and ESP32-C3 builds use verified HTTPS for production. Device authentication stays enabled on the Java server.
+
+The C3 worker sends its batches of four over one keep-alive TLS session. HTTPS multi-batch cycles use HTTP/1.1 with `Connection: keep-alive`, and the last batch sends `Connection: close`. Plain-HTTP cycles stay HTTP/1.0 close-delimited, with one connection per batch. A reply without `Content-Length` is read until close and accepted if complete; the session then closes and the next batch reconnects. Chunked bodies and conflicting lengths are invalid and discard the cycle. A heap guard fails the poll (blink code 1, normal retry backoff) when free internal heap is below 40960 bytes or the largest free block is below 20480 bytes (`MIN_FREE_HEAP_BYTES`, `MIN_LARGEST_BLOCK_BYTES` in `http_exchange.h`). A multi-batch cycle with no finished batch for 60 seconds (`CYCLE_DEADLINE_MS`) is discarded as stalled. A failed or expired cycle closes the session.
+
+The `kite_c3` environment targets ESP32-C3 with 4 MB flash. It uses `tools/partitions-kite-c3.csv`: two 1.875 MiB OTA slots and a 192 KiB filesystem. The partition table cannot change over OTA, so an existing C3 controller needs one USB reflash. The reflash wipes presets and `cfg.json`. The environment switches off MQTT, Alexa, Hue sync, infrared, GIF and DMX input. The image is about 1.9 MB against a 1,966,080-byte slot. Judge size by the real `firmware.bin`, not by the PlatformIO "Flash used" figure.
 
 ## Monthly night dimming
 
