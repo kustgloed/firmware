@@ -136,6 +136,7 @@
 #include <SPIFFSEditor.h>
 #include "src/dependencies/time/TimeLib.h"
 #include "src/dependencies/timezone/Timezone.h"
+#include "kite_access.h"
 #include "src/dependencies/toki/Toki.h"
 
 #ifndef WLED_DISABLE_ALEXA
@@ -222,23 +223,6 @@ using PSRAMDynamicJsonDocument = BasicJsonDocument<PSRAM_Allocator>;
   #define MDNS_NAME DEFAULT_MDNS_NAME
 #endif
 
-#if defined(WLED_AP_PASS) && !defined(WLED_AP_SSID)
-  #error WLED_AP_PASS is defined but WLED_AP_SSID is still the default. \
-         Please change WLED_AP_SSID to something unique.
-#endif
-
-#ifndef WLED_AP_SSID
-  #define WLED_AP_SSID DEFAULT_AP_SSID
-#endif
-
-#ifndef WLED_AP_PASS
-  #define WLED_AP_PASS DEFAULT_AP_PASS
-#endif
-
-#ifndef WLED_PIN
-  #define WLED_PIN ""
-#endif
-
 #ifndef SPIFFS_EDITOR_AIRCOOOKIE
   #error You are not using the Aircoookie fork of the ESPAsyncWebserver library.\
   Using upstream puts your WiFi password at risk of being served by the filesystem.\
@@ -287,13 +271,9 @@ using PSRAMDynamicJsonDocument = BasicJsonDocument<PSRAM_Allocator>;
 
 #define WLED_CODENAME "Kagayaki"
 
-// AP and OTA default passwords (for maximum security change them!)
-WLED_GLOBAL char apPass[65]  _INIT(WLED_AP_PASS);
-#ifdef WLED_OTA_PASS
-WLED_GLOBAL char otaPass[33] _INIT(WLED_OTA_PASS);
-#else
-WLED_GLOBAL char otaPass[33] _INIT(DEFAULT_OTA_PASS);
-#endif
+// Per-unit secrets: no defaults, written over USB serial only (empty means unprovisioned)
+WLED_GLOBAL char apPass[65]  _INIT("");
+WLED_GLOBAL char otaPass[33] _INIT("");
 
 // Hardware and pin config
 #ifndef BTNPIN
@@ -559,11 +539,7 @@ WLED_GLOBAL byte macroCountdown _INIT(0);
 WLED_GLOBAL byte macroAlexaOn _INIT(0), macroAlexaOff _INIT(0);
 
 // Security CONFIG
-#ifdef WLED_OTA_PASS
-WLED_GLOBAL bool otaLock        _INIT(true);     // prevents OTA firmware updates without password. ALWAYS enable if system exposed to any public networks
-#else
-WLED_GLOBAL bool otaLock        _INIT(false);     // prevents OTA firmware updates without password. ALWAYS enable if system exposed to any public networks
-#endif
+WLED_GLOBAL bool otaLock        _INIT(true);      // prevents OTA firmware updates without password
 WLED_GLOBAL bool wifiLock       _INIT(false);     // prevents access to WiFi settings when OTA lock is enabled
 #ifdef WLED_ENABLE_AOTA
 WLED_GLOBAL bool aOtaEnabled    _INIT(true);      // ArduinoOTA allows easy updates directly from the IDE. Careful, it does not auto-disable when OTA lock is on
@@ -571,9 +547,13 @@ WLED_GLOBAL bool aOtaEnabled    _INIT(true);      // ArduinoOTA allows easy upda
 WLED_GLOBAL bool aOtaEnabled    _INIT(false);     // ArduinoOTA allows easy updates directly from the IDE. Careful, it does not auto-disable when OTA lock is on
 #endif
 WLED_GLOBAL bool otaSameSubnet  _INIT(true);      // prevent OTA updates from other subnets (e.g. internet) if no PIN is set
-WLED_GLOBAL char settingsPIN[5] _INIT(WLED_PIN);  // PIN for settings pages
-WLED_GLOBAL bool correctPIN     _INIT(!strlen(settingsPIN));
+WLED_GLOBAL char settingsPIN[KiteAccess::PIN_LENGTH + 1] _INIT("");  // PIN for settings pages, no default
+WLED_GLOBAL KiteAccess::Lockout pinLockout;
+WLED_GLOBAL KiteAccess::Lockout otaLockout;
+WLED_GLOBAL KiteAccess::Session pinSession;
+inline bool kiteUnlocked(uint32_t clientIp) { return clientIp != 0 && pinSession.unlocked(clientIp, millis()); }  // 0 = non-IPv4 client
 WLED_GLOBAL unsigned long lastEditTime _INIT(0);
+WLED_GLOBAL KiteAccess::Mode kiteMode _INIT(KiteAccess::Mode::None);  // persisted lifecycle mode, loaded with the config
 
 WLED_GLOBAL uint16_t userVar0 _INIT(0), userVar1 _INIT(0); //available for use in usermod
 
@@ -910,22 +890,6 @@ WLED_GLOBAL JsonDocument *pDoc _INIT(&gDoc);
 
 #define WLED_CONNECTED (WLEDNetwork.isConnected())
 
-#ifndef WLED_AP_SSID_UNIQUE
-  #define WLED_SET_AP_SSID() do { \
-    strcpy_P(apSSID, PSTR(WLED_AP_SSID)); \
-  } while(0)
-#else
-  #define WLED_SET_AP_SSID() do { \
-    snprintf_P(\
-      apSSID, \
-      sizeof(apSSID)-1, \
-      PSTR("%s-%s"), \
-      WLED_BRAND, \
-      escapedMac.c_str()+6 \
-    ); \
-  } while(0)
-#endif
-
 //macro to convert F to const
 #define SET_F(x)  (const char*)F(x)
 
@@ -946,7 +910,7 @@ public:
 
   void beginStrip();
   void handleConnection();
-  void initAP(bool resetAP = false);
+  void initAP();
   void initConnection();
   void initInterfaces();
   #if defined(STATUSLED)

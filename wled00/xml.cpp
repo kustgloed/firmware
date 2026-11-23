@@ -256,49 +256,7 @@ void getSettingsJS(byte subPage, Print& settingsScript)
     printSetFormValue(settingsScript,PSTR("D2"),dnsAddress[2]);
     printSetFormValue(settingsScript,PSTR("D3"),dnsAddress[3]);
 
-    printSetFormValue(settingsScript,PSTR("CM"),cmDNS);
-    printSetFormIndex(settingsScript,PSTR("AB"),apBehavior);
-    printSetFormValue(settingsScript,PSTR("AS"),apSSID);
-    printSetFormCheckbox(settingsScript,PSTR("AH"),apHide);
-
-    l = strlen(apPass);
-    char fapass[l+1]; //fill password field with ***
-    fapass[l] = 0;
-    memset(fapass,'*',l);
-    printSetFormValue(settingsScript,PSTR("AP"),fapass);
-
-    printSetFormValue(settingsScript,PSTR("AC"),apChannel);
-    #ifdef ARDUINO_ARCH_ESP32
-    printSetFormValue(settingsScript,PSTR("TX"),txPower);
-    #else
-    settingsScript.print(F("gId('tx').style.display='none';"));
-    #endif
-    printSetFormCheckbox(settingsScript,PSTR("FG"),force802_3g);
-    printSetFormCheckbox(settingsScript,PSTR("WS"),noWifiSleep);
-    #ifdef SOC_WIFI_SUPPORT_5G
-    printSetFormValue(settingsScript,PSTR("BM"),wifiBandMode);
-    #else
-    settingsScript.print(F("gId('bm').style.display='none';"));
-    #endif
-
-    #ifndef WLED_DISABLE_ESPNOW
-    printSetFormCheckbox(settingsScript,PSTR("RE"),enableESPNow);
-    settingsScript.printf_P(PSTR("rstR();")); // reset remote list
-    for (size_t i = 0; i < linked_remotes.size(); i++) {
-      settingsScript.printf_P(PSTR("aR(\"RM%u\",\"%s\");"), i, linked_remotes[i].data()); // add remote to list
-    }
-    settingsScript.print(F("tE();")); // fill fields
-    #else
-    //hide remote settings if not compiled
-    settingsScript.print(F("toggle('ESPNOW');"));  // hide ESP-NOW setting
-    #endif
-
-    #if defined(ARDUINO_ARCH_ESP32) && defined(WLED_USE_ETHERNET)
-    printSetFormValue(settingsScript,PSTR("ETH"),ethernetType);
-    #else
-    //hide ethernet setting if not compiled in
-    settingsScript.print(F("gId('ethd').style.display='none';"));
-    #endif
+    // mode, access point, radio, ESP-NOW and Ethernet fields are not on the form (configuration file only)
 
     if (WLEDNetwork.isConnected()) //is connected
     {
@@ -326,11 +284,6 @@ void getSettingsJS(byte subPage, Print& settingsScript)
       printSetClassElementHTML(settingsScript,PSTR("sip"),1,(char*)F("Not active"));
     }
 
-    #ifndef WLED_DISABLE_ESPNOW
-    if (strlen(last_signal_src) > 0) { //Have seen an ESP-NOW Remote
-      printSetClassElementHTML(settingsScript,PSTR("rlid"),0,last_signal_src);
-    }
-    #endif
   }
 
   if (subPage == SUBPAGE_LEDS)
@@ -652,11 +605,6 @@ void getSettingsJS(byte subPage, Print& settingsScript)
 
   if (subPage == SUBPAGE_SEC)
   {
-    byte l = strlen(settingsPIN);
-    char fpass[l+1]; //fill PIN field with 0000
-    fpass[l] = 0;
-    memset(fpass,'0',l);
-    printSetFormValue(settingsScript,PSTR("PIN"),fpass);
     printSetFormCheckbox(settingsScript,PSTR("NO"),otaLock);
     printSetFormCheckbox(settingsScript,PSTR("OW"),wifiLock);
     printSetFormCheckbox(settingsScript,PSTR("AO"),aOtaEnabled);

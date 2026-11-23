@@ -87,6 +87,7 @@ void handleSerial()
     byte next = Serial.peek();
     switch (state) {
       case AdaState::Header_A:
+        if (!KiteAccess::serialByteAllowed(kiteDeviceState(), next)) break;  // AI: only Improv outside factory state
         if      (next == 'A')  { state = AdaState::Header_d; }
         else if (next == 0xC9) { state = AdaState::TPM2_Header_Type; } //TPM2 start byte
         else if (next == 'I')  { handleImprovPacket(); return; }

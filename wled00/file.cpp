@@ -479,6 +479,7 @@ bool handleFileRead(AsyncWebServerRequest* request, String path){
   DEBUGFS_PRINT(F("WS FileRead: ")); DEBUGFS_PRINTLN(path);
   if(path.endsWith("/")) path += "index.htm";
   if(path.indexOf(F("sec")) > -1) return false;
+  if(KiteAccess::protectedFile(path.c_str())) return false; // AI: mode record, backups, temporary files, non-flat paths
   #ifdef BOARD_HAS_PSRAM
   if (path.endsWith(FPSTR(getPresetsFileName()))) {
     size_t psize;
