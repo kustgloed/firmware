@@ -21,7 +21,7 @@ The base is the upstream **development snapshot 17.0.0-devV5**, pinned to
 | `tools/partitions-kite-s3.csv` | Supplies the existing ESP32-S3 flash partition layout. |
 | `platformio_override.sample.ini` | Preserves the upstream examples and adds the three Kustgloed board environments. |
 | `wled00/asyncDNS.h` | Holds the lwIP core lock during DNS calls where core locking is enabled. |
-| `wled00/cfg.cpp` | Invokes the usermod hooks during protected configuration load and save. |
+| `wled00/cfg.cpp` | Invokes the usermod hooks during protected configuration load and save, and clears the save flag before the write so a change made during a save is not lost. |
 | `wled00/fcn_declare.h` | Declares the protected configuration hooks. |
 | `wled00/um_manager.cpp` | Dispatches the protected configuration hooks to enabled usermods. |
 | `wled00/set.cpp` | Redacts usermod settings values in debug output. |

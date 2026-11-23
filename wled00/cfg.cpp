@@ -829,12 +829,16 @@ bool deserializeConfigFromFS() {
 }
 
 void serializeConfigToFS() {
+  configNeedsWrite = false; // clear first: a change that arrives during the write schedules another save
   serializeConfigSec();
   backupConfig(); // backup before writing new config
 
   DEBUG_PRINTLN(F("Writing settings to /cfg.json..."));
 
-  if (!requestJSONBufferLock(JSON_LOCK_CFG_SER)) return;
+  if (!requestJSONBufferLock(JSON_LOCK_CFG_SER)) {
+    configNeedsWrite = true; // retry on the next loop pass
+    return;
+  }
 
   JsonObject root = pDoc->to<JsonObject>();
 
@@ -844,8 +848,6 @@ void serializeConfigToFS() {
   if (f) serializeJson(root, f);
   f.close();
   releaseJSONBufferLock();
-
-  configNeedsWrite = false;
 }
 
 void serializeConfig(JsonObject root) {
