@@ -152,3 +152,12 @@ describe('installed version', () => {
     assert.doesNotMatch(html, /<span class="sip"[^>]*>WLED ##VERSION##/);
   });
 });
+
+describe('C3 build flags', () => {
+  it('kite_c3 serves the welcome page at the root path', () => {
+    const ini = fs.readFileSync(path.join(__dirname, '..', 'platformio_override.sample.ini'), 'utf8');
+    const start = ini.indexOf('[env:kite_c3]');
+    const end = ini.indexOf('\n[', start + 1);
+    assert.match(ini.slice(start, end < 0 ? undefined : end), /-D KITE_WIND_SETTINGS_HOME/);
+  });
+});

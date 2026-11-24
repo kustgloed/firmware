@@ -23,7 +23,7 @@ The base is the upstream **development snapshot 17.0.0-devV5**, pinned to
 | `tools/release-check/` | Builds and scans packaged release images in a clean container for all four supported boards. Passes the commit and its time to the build, checks both in the ESP32-C3 build log, and runs the certificate date test. |
 | `tools/partitions-kite-s3.csv` | Supplies the existing ESP32-S3 flash partition layout. |
 | `tools/partitions-kite-c3.csv` | Supplies the ESP32-C3 flash partition layout. |
-| `platformio_override.sample.ini` | Preserves the upstream examples and adds the four Kustgloed board environments. The ESP32-C3 environment runs the firmware version script. It also turns off the socket server and the mDNS responder. It sets the C3 button default to GPIO9, the controller's physical button, so the recovery gesture reaches it. |
+| `platformio_override.sample.ini` | Preserves the upstream examples and adds the four Kustgloed board environments. The ESP32-C3 environment runs the firmware version script. It also turns off the socket server and the mDNS responder. It sets the C3 button default to GPIO9, the controller's physical button, so the recovery gesture reaches it, and serves the welcome page at the root path. |
 | `VERSION` | Holds the firmware release number. |
 | `tools/kite_version.py` | Defines the firmware version from `VERSION`, the short commit (or `KITE_FW_COMMIT` when the checkout has no commit) and the build environment, and fails the build on an invalid value. Defines the build epoch for the certificate clock floor from `SOURCE_DATE_EPOCH` or the commit time, and fails the build on an invalid or future value. |
 | `wled00/asyncDNS.h` | Holds the lwIP core lock during DNS calls where core locking is enabled. |
