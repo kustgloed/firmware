@@ -74,6 +74,13 @@ button:hover, .btn:hover{
   position: absolute;
   width: 60px;
 }
+.helpB svg {
+  width: 1.3em;
+  height: 1.3em;
+  fill: currentColor;
+  display: block;
+  margin: auto;
+}
 .hide {
   display: none;
 }

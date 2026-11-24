@@ -9,7 +9,7 @@
 			fetch(getURL('/kite-version'))
 				.then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
 				.then(d => {
-					document.querySelector('.installed-version').textContent = d.version || 'Unknown';
+					document.querySelector('.installed-version').textContent = (d.version || 'Unknown').split('+')[0];
 					document.querySelector('.board-name').textContent = d.board || 'Unknown';
 				})
 				.catch(() => {
@@ -27,7 +27,7 @@
 </head>
 <body onload="GetV();">
 	<div class="toprow" style="min-height:64px">
-	<div class="helpB"><button type="button" aria-label="Help" title="Help" onclick="window.open('https://kustgloed.nl/en/firmware-update/','_blank','noopener,noreferrer')">?</button></div>
+	<div class="helpB"><button type="button"></button></div>
 	</div>
 	<form method='POST' action='./update' id='upd' enctype='multipart/form-data' onsubmit="hideforms()">
 	<div class="sec">
@@ -35,7 +35,8 @@
 		<p>
 		Installed version: <span class="sip installed-version">Loading...</span><br>
 		Board: <span class="sip board-name">Loading...</span><br>
-		Need the new file? See the <a href="https://kustgloed.nl/en/firmware-update/" target="_blank" rel="noopener noreferrer">update guide</a>.
+		Need the new file? See the <a href="https://kustgloed.nl/en/firmware-update/" target="_blank" rel="noopener noreferrer">update guide</a>.<br>
+		Red lamp blinking? See the <a href="https://kustgloed.nl/en/status-lamp/" target="_blank" rel="noopener noreferrer">status lamp codes</a>.
 		</p>
 		<hr class="sml">
 		<h3>Manual upload</h3>

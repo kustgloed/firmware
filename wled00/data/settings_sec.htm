@@ -18,8 +18,15 @@
 		function setBckFilename(x) {
 			x.setAttribute("download","wled_" + x.getAttribute("download") + (sd=="WLED"?"":("_" +sd)));
 		}
+		function KV() {
+			fetch(getURL('/kite-version'))
+				.then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+				.then(j => { gId('kver').textContent = (j.version || 'Unknown').split('+')[0]; })
+				.catch(() => { gId('kver').textContent = 'Unknown'; });
+		}
 		function S() {
 			getLoc();
+			KV();
 			if (loc) {
 				gId("bckcfg").setAttribute('href',getURL(gId("bckcfg").pathname));
 				gId("bckpresets").setAttribute('href',getURL(gId("bckpresets").pathname));
@@ -35,7 +42,7 @@
 <body>
 <form id="form_s" name="Sf" method="post">
 	<div class="toprow">
-	<div class="helpB"><button type="button" onclick="H('features/settings/#security-settings')">?</button></div>
+	<div class="helpB"><button type="button"></button></div>
 	<button type="button" onclick="B()">Back</button><button type="submit">Save</button><hr>
 	</div>
 		<h2>Security & Update Setup</h2>
@@ -74,7 +81,7 @@
 		A huge thank you to everyone who helped me create WLED!<br><br>
 		(c) 2016-2024 Christian Schwinne <br>
 		<i>Licensed under the <a href="https://github.com/wled-dev/WLED/blob/main/LICENSE" target="_blank">EUPL v1.2 license</a></i><br><br>
-		Installed version: <span class="sip">WLED ##VERSION##</span>
+		Installed version: <span class="sip" id="kver">Loading...</span>
 	</div>
 		<div id="toast"></div>
 		<button type="button" onclick="B()">Back</button><button type="submit">Save</button>
