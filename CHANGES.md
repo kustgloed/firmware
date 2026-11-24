@@ -43,6 +43,7 @@ The base is the upstream **development snapshot 17.0.0-devV5**, pinned to
 | `wled00/data/settings_sec.htm` | Removes the PIN field and the set-new-password text; the update password only unlocks the toggles. Removes the factory reset checkbox. |
 | `wled00/data/settings_wifi.htm` | Removes the access point name and password fields, and the mode, access point, radio, ESP-NOW, Ethernet and mDNS fields, so the form posts station fields only. |
 | `wled00/data/common.js` | Removes the shared development banner. |
+| `wled00/data/settings.htm` | Adds a button that opens the Kustgloed status lamp code guide in a new tab. |
 | `wled00/data/index.htm` | Replaces the main controls with a settings redirect and fallback link. |
 | `wled00/data/index.js` | Removes the live-data overlay tied to the previous page. |
 | `wled00/data/settings_um.htm` | Removes the global I²C and SPI controls from the usermod settings page. |
