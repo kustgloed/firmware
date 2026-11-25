@@ -30,9 +30,9 @@ function kiteI18n(T, after) {
 	render();
 	return render;
 }
-// Installed version and board from /kite-version; resolves to {version, board} without the build suffix.
+// Installed version and board from /kite-status; resolves to {version, board} without the build suffix.
 function kiteVersion() {
-	return fetch("/kite-version").then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+	return fetch("/kite-status").then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
 		.then(function(j) { return { version: (j.version || "").split("+")[0], board: j.board || "" }; });
 }
 // Points every a[data-site] at the website in the current language. The version and board go along as

@@ -51,7 +51,7 @@
 		<div class="wrap hero hide" id="welcome">
 			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V18h8v-3.3A7 7 0 0 0 12 2zM9 20h6v2H9z"/></svg>
 			<h1 data-t="title"></h1>
-			<p data-t="intro"></p>
+			<p id="intro" data-t="intro"></p>
 			<button type="button" class="go" id="start" data-t="start"></button>
 		</div>
 
@@ -78,6 +78,8 @@
 					title: 'Welkom bij Kustgloed',
 					intro: 'Je controller is aangesloten. In een paar stappen stel je wifi in, controleer je de lampen en houd je de software actueel.',
 					start: 'Aan de slag',
+					introSetup: 'Verbind de controller eerst met het wifi-netwerk van je thuis of kantoor. Zo kan hij de wind ophalen.',
+					startSetup: 'Wifi kiezen',
 					homeTitle: 'Kustgloed',
 					loading: 'Status ophalen…',
 					version: 'Versie', wifi: 'Wifi-signaal', age: 'Laatste weergegevens',
@@ -86,7 +88,7 @@
 					code: 'Statuslamp-code',
 					updateT: 'Software bijwerken', updateS: 'Zelden nodig. Versie bekijken en een nieuw bestand uploaden',
 					lampT: 'Statuslamp-codes', lampS: 'Handleiding voor het knipperen van de lamp',
-					testT: 'Lampen testen', testStop: 'Test stoppen', testS: 'Alle lampen wisselen 20 seconden van kleur',
+					testT: 'Lampen testen', testStop: 'Test stoppen', testS: 'Alle lampen wisselen 20 seconden van kleur en gaan daarna uit',
 					testOn: 'Test loopt, nog {n} s', testErr: 'Test starten mislukt',
 					wifiT: 'Ander wifi-netwerk?', wifiS: 'Houd de resetknop op de controller 10 seconden ingedrukt en laat los. De controller start opnieuw in de instelmodus.',
 					codes: ['', 'Server niet bereikbaar', 'Geen wifi-verbinding', 'Instellingen onvolledig', 'Apparaatsleutel geweigerd',
@@ -97,6 +99,8 @@
 					title: 'Welcome to Kustgloed',
 					intro: 'Your controller is connected. In a few steps you set up Wi-Fi, check the lamps and keep the software up to date.',
 					start: 'Get started',
+					introSetup: 'First connect the controller to the Wi-Fi network at home or at the office. That lets it fetch the wind.',
+					startSetup: 'Choose Wi-Fi',
 					homeTitle: 'Kustgloed',
 					loading: 'Loading status…',
 					version: 'Version', wifi: 'Wi-Fi signal', age: 'Last weather data',
@@ -105,7 +109,7 @@
 					code: 'Status lamp code',
 					updateT: 'Update software', updateS: 'Rarely needed. See the version and upload a new file',
 					lampT: 'Status lamp codes', lampS: 'Manual for the blinking lamp',
-					testT: 'Test lamps', testStop: 'Stop test', testS: 'All lamps change colour for 20 seconds',
+					testT: 'Test lamps', testStop: 'Stop test', testS: 'All lamps change colour for 20 seconds, then switch off',
 					testOn: 'Test running, {n} s left', testErr: 'Could not start the test',
 					wifiT: 'Other Wi-Fi network?', wifiS: 'Hold the reset button on the controller for 10 seconds, then release. The controller restarts in setup mode.',
 					codes: ['', 'Server unreachable', 'No Wi-Fi connection', 'Incomplete settings', 'Device key rejected',
@@ -114,19 +118,23 @@
 				}
 			};
 			const TEST_S = 20;
-			let last = null, testEnd = 0;
+			let last = null, testEnd = 0, tickTimer = 0, setup = false;
 			function show(id) {
 				for (const v of ['welcome', 'home']) document.getElementById(v).classList.toggle('hide', v !== id);
 			}
 			function seen() { try { return localStorage.getItem('kite-welcomed') === '1'; } catch (e) { return false; } }
-			function route() { show(location.hash === '#home' || seen() ? 'home' : 'welcome'); }
+			// In setup the first step is always the Wi-Fi choice, never the home page.
+			function route() { show(setup || !(location.hash === '#home' || seen()) ? 'welcome' : 'home'); poll(); }
 			document.getElementById('start').onclick = () => {
+				if (setup) { location.href = '/settings/wifi'; return; }
 				try { localStorage.setItem('kite-welcomed', '1'); } catch (e) {}
 				location.hash = '#home';
 			};
 			window.onhashchange = route;
 			function paint(l) {
 				const t = T[l], st = document.getElementById('status');
+				document.getElementById('intro').textContent = t[setup ? 'introSetup' : 'intro'];
+				document.getElementById('start').textContent = t[setup ? 'startSetup' : 'start'];
 				document.getElementById('testT').textContent = testEnd > Date.now() ? t.testStop : t.testT;
 				if (!last) return;
 				const bad = last.code > 0;
@@ -139,15 +147,13 @@
 			}
 			const rerender = kiteI18n(T, paint);
 			kiteLinks();
-			kiteVersion().then(v => { document.getElementById('sVer').textContent = v.version || '–'; }).catch(() => {});
-			// Reads the controller's own info; the wind lamp values live under "u".
+			// Reads the controller's public status: version, Wi-Fi signal, lamp code and data age.
 			function poll() {
 				if (document.hidden || document.getElementById('home').classList.contains('hide')) return;
-				fetch('/json/info').then(r => { if (!r.ok) throw 0; return r.json(); }).then(j => {
-					const u = j.u || {}, g = k => (u[k] || [])[0];
-					const age = g('Wind data age');
-					last = { ok: true, code: +g('Kite system blink code') || 0, age: age == null ? null : +age,
-						wifi: j.wifi && j.wifi.signal != null ? +j.wifi.signal : null };
+				fetch('/kite-status').then(r => { if (!r.ok) throw 0; return r.json(); }).then(j => {
+					testSync(+j.test || 0);
+					last = { ok: true, code: +j.code || 0, age: j.age == null ? null : +j.age, wifi: j.signal == null ? null : +j.signal };
+					document.getElementById('sVer').textContent = (j.version || '').split('+')[0] || '–';
 					rerender();
 				}).catch(() => { last = { ok: false, code: 0 }; rerender(); });
 			}
@@ -155,19 +161,26 @@
 			setInterval(poll, 5000);
 			// Lamp test: the controller cycles every lamp through the test colours for TEST_S seconds.
 			function sendTest(on) {
-				return fetch('/json/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kiteLampTest: on }) })
-					.then(r => { if (!r.ok) throw 0; });
+				return fetch('/kite-lamptest?on=' + (on ? 1 : 0), { method: 'POST' }).then(r => { if (!r.ok) throw 0; });
 			}
 			document.getElementById('test').onclick = () => {
 				const on = testEnd <= Date.now(), m = document.getElementById('testM');
 				sendTest(on).then(() => { testEnd = on ? Date.now() + TEST_S * 1000 : 0; tick(); }).catch(() => { m.textContent = T[kiteLang()].testErr; });
 			};
+			// The controller reports the seconds left, so a reloaded page shows a running test again.
+			function testSync(left) {
+				const was = testEnd > Date.now();
+				testEnd = left > 0 ? Date.now() + left * 1000 : 0;
+				if ((left > 0) !== was) tick();
+			}
 			function tick() {
 				const m = document.getElementById('testM'), n = Math.ceil((testEnd - Date.now()) / 1000);
-				if (n > 0) { m.textContent = T[kiteLang()].testOn.replace('{n}', n); setTimeout(tick, 500); } else { testEnd = 0; m.textContent = ''; }
+				clearTimeout(tickTimer);
+				if (n > 0) { m.textContent = T[kiteLang()].testOn.replace('{n}', n); tickTimer = setTimeout(tick, 500); } else { testEnd = 0; m.textContent = ''; }
 				rerender();
 			}
-			route();
+			// The mode decides the first screen: ask the controller before showing anything.
+			fetch('/kite-status').then(r => r.json()).then(j => { setup = j.setup === true; }).catch(() => {}).then(() => { route(); rerender(); });
 		</script>
 	</body>
 </html>

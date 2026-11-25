@@ -591,7 +591,11 @@ void WLED::setup()
   #endif
 
   // fill in unique mdns default
-  if (strcmp(cmDNS, DEFAULT_MDNS_NAME) == 0) sprintf_P(cmDNS, PSTR("wled-%*s"), 6, escapedMac.c_str() + 6);
+  if (strcmp(cmDNS, DEFAULT_MDNS_NAME) == 0) {  // AI: kite-<setup name suffix>, else kite-<last 3 MAC chars>
+    static const char prefix[] = "kustgloed-";
+    if (strncmp(apSSID, prefix, sizeof(prefix) - 1) == 0 && apSSID[sizeof(prefix) - 1]) snprintf_P(cmDNS, sizeof(cmDNS), PSTR("kite-%s"), apSSID + sizeof(prefix) - 1);
+    else sprintf_P(cmDNS, PSTR("kite-%*s"), 3, escapedMac.c_str() + 9);
+  }
 #ifndef WLED_DISABLE_MQTT
   if (mqttDeviceTopic[0] == 0) sprintf_P(mqttDeviceTopic, PSTR("wled/%*s"), 6, escapedMac.c_str() + 6);
   if (mqttClientID[0] == 0)    sprintf_P(mqttClientID, PSTR("WLED-%*s"), 6, escapedMac.c_str() + 6);

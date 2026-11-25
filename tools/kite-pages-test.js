@@ -136,8 +136,17 @@ describe('welcome page', () => {
     assert.match(html, /data-site="status-lamp\/"/);
     assert.match(html, /kiteLinks\(\)/);
     assert.match(html, /kiteI18n\(T/);
-    assert.match(html, /kiteLampTest/);
-    assert.match(html, /\/json\/info/);
+    assert.match(html, /\/kite-lamptest\?on=/);
+    assert.match(html, /testSync\(\+j\.test/, 'a reloaded page shows a running test');
+    assert.doesNotMatch(html, /\/json\/state/, 'general endpoints are refused at home');
+    assert.match(html, /\/kite-status/);
+    assert.doesNotMatch(html, /\/json\/info/, 'general endpoints are refused at home');
+  });
+
+  it('goes to the Wi-Fi page in setup instead of the home page', () => {
+    assert.match(html, /if \(setup\) \{ location\.href = '\/settings\/wifi'/);
+    assert.match(html, /setup \|\| !\(location\.hash/);
+    assert.match(html, /introSetup/);
   });
 
   it('shows the welcome screen only until the start button was used', () => {
@@ -185,11 +194,38 @@ describe('site links', () => {
   });
 });
 
+describe('status endpoint', () => {
+  it('is a public read-only endpoint with the fields the home page shows', () => {
+    const cpp = fs.readFileSync(path.join(__dirname, '..', 'wled00', 'wled_server.cpp'), 'utf8');
+    const block = cpp.slice(cpp.indexOf('F("/kite-status")'), cpp.indexOf('AsyncCallbackJsonWebHandler* handler'));
+    assert.match(block, /KiteAccess::Endpoint::Public/);
+    for (const key of ['version', 'board', 'signal', 'code', 'age', 'test', 'setup']) assert.match(block, new RegExp('\\\\"' + key + '\\\\"'));
+    assert.match(block, /Kite system blink code/);
+    assert.match(block, /Wind data age/);
+    assert.match(block, /Kite lamp test/);
+  });
+});
+
+describe('lamp test endpoint', () => {
+  it('is a public POST that hands kiteLampTest to the usermods', () => {
+    const cpp = fs.readFileSync(path.join(__dirname, '..', 'wled00', 'wled_server.cpp'), 'utf8');
+    const block = cpp.slice(cpp.indexOf('F("/kite-lamptest")'), cpp.indexOf('AsyncCallbackJsonWebHandler* handler'));
+    assert.match(block, /HTTP_POST/);
+    assert.match(block, /KiteAccess::Endpoint::Public/);
+    assert.match(block, /kiteLampTest/);
+    assert.match(block, /UsermodManager::readFromJsonState/);
+  });
+});
+
 describe('local lamp test', () => {
   it('the usermod reads kiteLampTest from the JSON state', () => {
     const cpp = fs.readFileSync(path.join(__dirname, '..', 'usermods', 'kite_wind', 'kite_wind.cpp'), 'utf8');
     assert.match(cpp, /readFromJsonState\(JsonObject& root\) override/);
     assert.match(cpp, /root\["kiteLampTest"\]/);
+    assert.match(cpp, /pixel != KiteWindStatus::STATUS_PIXEL/, 'lights every pixel, mapped or not');
+    assert.match(cpp, /"Kite lamp test"/);
+    assert.match(cpp, /RGBW32\(255, 100, 0, 0\), RGBW32\(255, 0, 0, 0\), RGBW32\(255, 200, 0, 0\),\s+RGBW32\(0, 255, 0, 0\), RGBW32\(0, 0, 255, 0\)/, 'orange, red, yellow, green, blue');
+    assert.match(cpp, /lampTestShown = false;\s+clearLeds = true;/, 'lamps go off after the test');
   });
 });
 
