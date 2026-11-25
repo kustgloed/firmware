@@ -3,99 +3,171 @@
 	<head>
 		<meta charset="utf-8">
 		<meta content="width=device-width, initial-scale=1" name="viewport">
-		<meta name="theme-color" content="#222222">
+		<meta name="theme-color" content="#0b1a2e">
 		<title>Kustgloed</title>
 		<script src="common.js"></script>
 		<style>
+			* { box-sizing: border-box; }
 			body {
 				font-family: Verdana, Helvetica, sans-serif;
-				text-align: center;
-				background-color: #222;
+				background: #0b1a2e;
 				margin: 0;
-				color: #fff;
+				color: #eaf2fb;
 			}
-			.lang {
-				position: absolute;
-				top: 10px;
-				right: 10px;
-			}
-			.lang button {
-				width: 52px;
-				margin: 0 2px;
-				padding: 6px;
-				font-size: 14px;
-			}
-			.lang button.on {
-				background-color: #fff;
-				color: #222;
-			}
-			.main {
-				padding: 12vh 16px 0;
-				animation: fi 1s both;
-			}
-			p {
-				max-width: 520px;
-				margin: 0 auto 28px;
-				line-height: 1.5;
-			}
-			.main > button {
-				display: block;
-				width: min(280px, 90%);
-				margin: 12px auto;
-				padding: 10px;
-				font-size: 18px;
-			}
-			button {
-				outline: none;
-				cursor: pointer;
-				font-family: helvetica;
-				background-color: #333;
-				color: white;
-				border: 0;
-				border-radius: 25px;
-			}
-			@keyframes fi {
-				from { opacity: 0; }
-				to   { opacity: 1; }
-			}
+			.lang { position: absolute; top: 10px; right: 10px; }
+			.lang button { width: 52px; margin: 0 2px; padding: 6px; font-size: 14px; }
+			.lang button.on { background: #f4c542; color: #0b1a2e; }
+			.wrap { max-width: 520px; margin: 0 auto; padding: 56px 16px 32px; animation: fi .8s both; }
+			h1 { font-size: 26px; margin: 0 0 8px; }
+			p { line-height: 1.5; margin: 0 0 20px; color: #b9c9dc; }
+			.hero { text-align: center; padding-top: 12vh; }
+			.hero svg { width: 72px; height: 72px; fill: #f4c542; margin-bottom: 8px; }
+			.go { display: block; width: min(280px, 90%); margin: 24px auto 0; padding: 12px; font-size: 18px; background: #f4c542; color: #0b1a2e; }
+			button { outline: none; cursor: pointer; font-family: helvetica; background: #1c3354; color: #fff; border: 0; border-radius: 25px; }
+			.card { background: #12264180; border: 1px solid #24406a; border-radius: 16px; padding: 16px; margin: 0 0 14px; text-align: left; }
+			.stat { display: flex; align-items: center; gap: 12px; font-size: 18px; }
+			.dot { width: 14px; height: 14px; border-radius: 50%; background: #6b7c93; flex: none; }
+			.ok .dot { background: #3ddc84; }
+			.bad .dot { background: #ff5a5a; }
+			.rows { margin: 12px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 14px; }
+			.rows dt { color: #8ea3bd; }
+			.rows dd { margin: 0; text-align: right; }
+			.fix { margin: 12px 0 0; font-size: 14px; }
+			a { color: #6fd3ff; }
+			.tile { display: block; text-decoration: none; color: #eaf2fb; }
+			.tile b { display: block; font-size: 17px; margin-bottom: 2px; }
+			.tile span { color: #b9c9dc; font-size: 14px; }
+			button.tile { width: 100%; text-align: left; font: inherit; font-size: 16px; border-radius: 16px; background: #12264180; border: 1px solid #24406a; padding: 16px; }
+			.msg { font-size: 13px; color: #8ea3bd; margin-top: 4px; min-height: 1.2em; }
+			.hide { display: none; }
+			@keyframes fi { from { opacity: 0; } to { opacity: 1; } }
 		</style>
 	</head>
 	<body>
 		<div class="lang">
 			<button type="button" id="nl">NL</button><button type="button" id="en">EN</button>
 		</div>
-		<div class="main">
+
+		<div class="wrap hero hide" id="welcome">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V18h8v-3.3A7 7 0 0 0 12 2zM9 20h6v2H9z"/></svg>
 			<h1 data-t="title"></h1>
 			<p data-t="intro"></p>
-			<button type="button" data-t="settings" onclick="window.location.href='./settings'"></button>
-			<button type="button" data-t="update" onclick="window.open(kiteSite('firmware-update/'), '_blank', 'noopener,noreferrer')"></button>
-			<button type="button" data-t="lamp" onclick="window.open(kiteSite('status-lamp/'), '_blank', 'noopener,noreferrer')"></button>
+			<button type="button" class="go" id="start" data-t="start"></button>
 		</div>
+
+		<div class="wrap hide" id="home">
+			<h1 data-t="homeTitle"></h1>
+			<div class="card" id="status">
+				<div class="stat"><span class="dot"></span><span id="sText" data-t="loading"></span></div>
+				<dl class="rows">
+					<dt data-t="version"></dt><dd id="sVer">–</dd>
+					<dt data-t="wifi"></dt><dd id="sWifi">–</dd>
+					<dt data-t="age"></dt><dd id="sAge">–</dd>
+				</dl>
+				<p class="fix hide" id="sFix"><span id="sCode"></span> <a data-site="status-lamp/" target="_blank" rel="noopener noreferrer" data-t="lampLink"></a></p>
+			</div>
+			<a class="card tile" href="./update"><b data-t="updateT"></b><span data-t="updateS"></span></a>
+			<a class="card tile" data-site="status-lamp/" target="_blank" rel="noopener noreferrer"><b data-t="lampT"></b><span data-t="lampS"></span></a>
+			<button type="button" class="card tile" id="test"><b id="testT"></b><span data-t="testS"></span><div class="msg" id="testM"></div></button>
+			<div class="card tile"><b data-t="wifiT"></b><span data-t="wifiS"></span></div>
+		</div>
+
 		<script>
 			const T = {
 				nl: {
 					title: 'Welkom bij Kustgloed',
-					intro: 'Je Kustgloed-controller is aangesloten. Stel hier je wifi in of werk de software bij.',
-					settings: 'Instellingen',
-					update: 'Update-handleiding',
-					lamp: 'Statuslamp-codes'
+					intro: 'Je controller is aangesloten. In een paar stappen stel je wifi in, controleer je de lampen en houd je de software actueel.',
+					start: 'Aan de slag',
+					homeTitle: 'Kustgloed',
+					loading: 'Status ophalen…',
+					version: 'Versie', wifi: 'Wifi-signaal', age: 'Laatste weergegevens',
+					ok: 'Alles werkt', bad: 'Aandacht nodig', na: 'Status niet beschikbaar',
+					lampLink: 'Wat betekent dit?',
+					code: 'Statuslamp-code',
+					updateT: 'Software bijwerken', updateS: 'Zelden nodig. Versie bekijken en een nieuw bestand uploaden',
+					lampT: 'Statuslamp-codes', lampS: 'Handleiding voor het knipperen van de lamp',
+					testT: 'Lampen testen', testStop: 'Test stoppen', testS: 'Alle lampen wisselen 20 seconden van kleur',
+					testOn: 'Test loopt, nog {n} s', testErr: 'Test starten mislukt',
+					wifiT: 'Ander wifi-netwerk?', wifiS: 'Houd de resetknop op de controller 10 seconden ingedrukt en laat los. De controller start opnieuw in de instelmodus.',
+					codes: ['', 'Server niet bereikbaar', 'Geen wifi-verbinding', 'Instellingen onvolledig', 'Apparaatsleutel geweigerd',
+						'Fout van de server', 'Ongeldig antwoord', 'Gegevens verouderd', 'Weergegevens niet beschikbaar',
+						'Onbekende locatie', 'Ongeldig verzoek', 'Serverstoring', 'Certificaat niet vertrouwd']
 				},
 				en: {
 					title: 'Welcome to Kustgloed',
-					intro: 'Your Kustgloed controller is connected. Set up your Wi-Fi or update the software here.',
-					settings: 'Settings',
-					update: 'Update guide',
-					lamp: 'Status lamp codes'
+					intro: 'Your controller is connected. In a few steps you set up Wi-Fi, check the lamps and keep the software up to date.',
+					start: 'Get started',
+					homeTitle: 'Kustgloed',
+					loading: 'Loading status…',
+					version: 'Version', wifi: 'Wi-Fi signal', age: 'Last weather data',
+					ok: 'Everything works', bad: 'Needs attention', na: 'Status unavailable',
+					lampLink: 'What does this mean?',
+					code: 'Status lamp code',
+					updateT: 'Update software', updateS: 'Rarely needed. See the version and upload a new file',
+					lampT: 'Status lamp codes', lampS: 'Manual for the blinking lamp',
+					testT: 'Test lamps', testStop: 'Stop test', testS: 'All lamps change colour for 20 seconds',
+					testOn: 'Test running, {n} s left', testErr: 'Could not start the test',
+					wifiT: 'Other Wi-Fi network?', wifiS: 'Hold the reset button on the controller for 10 seconds, then release. The controller restarts in setup mode.',
+					codes: ['', 'Server unreachable', 'No Wi-Fi connection', 'Incomplete settings', 'Device key rejected',
+						'Server error', 'Invalid response', 'Data out of date', 'Weather data unavailable',
+						'Unknown location', 'Bad request', 'Server failure', 'Certificate not trusted']
 				}
 			};
-			function render() {
-				const l = kiteLang();
-				document.documentElement.lang = l;
-				for (const e of document.querySelectorAll('[data-t]')) e.textContent = T[l][e.dataset.t];
-				for (const c of ['nl', 'en']) document.getElementById(c).classList.toggle('on', c === l);
+			const TEST_S = 20;
+			let last = null, testEnd = 0;
+			function show(id) {
+				for (const v of ['welcome', 'home']) document.getElementById(v).classList.toggle('hide', v !== id);
 			}
-			for (const c of ['nl', 'en']) document.getElementById(c).onclick = () => { kiteSetLang(c); render(); };
-			render();
+			function seen() { try { return localStorage.getItem('kite-welcomed') === '1'; } catch (e) { return false; } }
+			function route() { show(location.hash === '#home' || seen() ? 'home' : 'welcome'); }
+			document.getElementById('start').onclick = () => {
+				try { localStorage.setItem('kite-welcomed', '1'); } catch (e) {}
+				location.hash = '#home';
+			};
+			window.onhashchange = route;
+			function paint(l) {
+				const t = T[l], st = document.getElementById('status');
+				document.getElementById('testT').textContent = testEnd > Date.now() ? t.testStop : t.testT;
+				if (!last) return;
+				const bad = last.code > 0;
+				st.className = 'card ' + (last.ok ? (bad ? 'bad' : 'ok') : '');
+				document.getElementById('sText').textContent = last.ok ? (bad ? t.bad : t.ok) : t.na;
+				document.getElementById('sFix').classList.toggle('hide', !bad);
+				document.getElementById('sCode').textContent = bad ? t.code + ' ' + last.code + ': ' + (t.codes[last.code] || '') : '';
+				document.getElementById('sWifi').textContent = last.wifi == null ? '–' : last.wifi + ' %';
+				document.getElementById('sAge').textContent = last.age == null ? '–' : (last.age < 120 ? last.age + ' s' : Math.round(last.age / 60) + ' min');
+			}
+			const rerender = kiteI18n(T, paint);
+			kiteLinks();
+			kiteVersion().then(v => { document.getElementById('sVer').textContent = v.version || '–'; }).catch(() => {});
+			// Reads the controller's own info; the wind lamp values live under "u".
+			function poll() {
+				if (document.hidden || document.getElementById('home').classList.contains('hide')) return;
+				fetch('/json/info').then(r => { if (!r.ok) throw 0; return r.json(); }).then(j => {
+					const u = j.u || {}, g = k => (u[k] || [])[0];
+					const age = g('Wind data age');
+					last = { ok: true, code: +g('Kite system blink code') || 0, age: age == null ? null : +age,
+						wifi: j.wifi && j.wifi.signal != null ? +j.wifi.signal : null };
+					rerender();
+				}).catch(() => { last = { ok: false, code: 0 }; rerender(); });
+			}
+			poll();
+			setInterval(poll, 5000);
+			// Lamp test: the controller cycles every lamp through the test colours for TEST_S seconds.
+			function sendTest(on) {
+				return fetch('/json/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kiteLampTest: on }) })
+					.then(r => { if (!r.ok) throw 0; });
+			}
+			document.getElementById('test').onclick = () => {
+				const on = testEnd <= Date.now(), m = document.getElementById('testM');
+				sendTest(on).then(() => { testEnd = on ? Date.now() + TEST_S * 1000 : 0; tick(); }).catch(() => { m.textContent = T[kiteLang()].testErr; });
+			};
+			function tick() {
+				const m = document.getElementById('testM'), n = Math.ceil((testEnd - Date.now()) / 1000);
+				if (n > 0) { m.textContent = T[kiteLang()].testOn.replace('{n}', n); setTimeout(tick, 500); } else { testEnd = 0; m.textContent = ''; }
+				rerender();
+			}
+			route();
 		</script>
 	</body>
 </html>

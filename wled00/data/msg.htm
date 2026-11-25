@@ -1,20 +1,55 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
 
 <head>
-	<meta content='width=device-width' name='viewport'>
-	<title>WLED Message</title>
+	<meta content='width=device-width, initial-scale=1' name='viewport'>
+	<meta charset="utf-8">
+	<meta name="theme-color" content="#0b1a2e">
+	<title>Kustgloed</title>
+	<script src="common.js"></script>
 	<script>
 		function B() { window.history.back() };
 		function RS() { window.location = "../settings"; }
 		function RP() { top.location.href = "../"; }
+		// Language buttons, and an optional countdown (#cd data-s seconds) that reveals .fail at zero.
+		document.addEventListener("DOMContentLoaded", function() {
+			kiteI18n({ nl: {}, en: {} });
+			var cd = document.getElementById("cd");
+			if (!cd) return;
+			var n = +cd.getAttribute("data-s"), id = setInterval(function() {
+				n--;
+				var e = document.querySelectorAll(".cdn");
+				for (var i = 0; i < e.length; i++) e[i].textContent = n > 0 ? n : 0;
+				if (n <= 0) {
+					clearInterval(id);
+					cd.className = "hide";
+					var f = document.querySelectorAll(".fail");
+					for (i = 0; i < f.length; i++) f[i].className = f[i].className.replace("hide", "");
+				}
+			}, 1000);
+		});
 	</script>
 	<style>
-		@import url("style.css");
+		* { box-sizing: border-box; }
+		body { font-family: Verdana, Helvetica, sans-serif; background: #0b1a2e; margin: 0; color: #eaf2fb; }
+		.lang { position: absolute; top: 10px; right: 10px; }
+		.lang button { width: 52px; margin: 0 2px; padding: 6px; font-size: 14px; }
+		.lang button.on { background: #f4c542; color: #0b1a2e; }
+		.wrap { max-width: 520px; margin: 0 auto; padding: 64px 16px 32px; line-height: 1.5; color: #b9c9dc; font-size: 15px; }
+		h2 { font-size: 24px; margin: 0 0 12px; color: #eaf2fb; }
+		button { outline: none; cursor: pointer; font-family: helvetica; background: #1c3354; color: #fff; border: 0; border-radius: 25px; padding: 10px 18px; font-size: 16px; }
+		.bt { background: #f4c542; color: #0b1a2e; }
+		a { color: #6fd3ff; }
+		ol { padding-left: 20px; }
+		.fail { border: 1px solid #f4c54280; border-radius: 12px; padding: 12px; margin-top: 16px; }
+		html[lang=nl] .en, html[lang=en] .nl { display: none; }
+		.hide { display: none; }
 	</style>
 </head>
 
 <body>
+	<div class="lang"><button type="button" id="nl">NL</button><button type="button" id="en">EN</button></div>
+	<div class="wrap">
 	<h2>Sample Message.</h2>
 	Sample Detail.
 </body>

@@ -11,6 +11,40 @@ function kiteLang() {
 function kiteSetLang(l) { try { localStorage.setItem("kite-lang", l); } catch (e) {} }
 // Site address in the current language, with an optional page path such as "status-lamp/".
 function kiteSite(p = "") { return "https://kustgloed.nl/" + (kiteLang() === "en" ? "en/" : "") + p; }
+// Translates [data-t] (text) and [data-h] (HTML) from T[lang], marks the NL/EN buttons, then calls after().
+function kiteI18n(T, after) {
+	function render() {
+		var l = kiteLang(), e, i;
+		d.documentElement.lang = l;
+		e = d.querySelectorAll("[data-t]");
+		for (i = 0; i < e.length; i++) e[i].textContent = T[l][e[i].getAttribute("data-t")];
+		e = d.querySelectorAll("[data-h]");
+		for (i = 0; i < e.length; i++) e[i].innerHTML = T[l][e[i].getAttribute("data-h")];
+		for (i = 0; i < 2; i++) { var c = ["nl", "en"][i], b = d.getElementById(c); if (b) b.className = c === l ? "on" : ""; }
+		if (after) after(l);
+	}
+	for (var i = 0; i < 2; i++) {
+		var b = d.getElementById(["nl", "en"][i]);
+		if (b) b.onclick = (function(c) { return function() { kiteSetLang(c); render(); }; })(["nl", "en"][i]);
+	}
+	render();
+	return render;
+}
+// Installed version and board from /kite-version; resolves to {version, board} without the build suffix.
+function kiteVersion() {
+	return fetch("/kite-version").then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+		.then(function(j) { return { version: (j.version || "").split("+")[0], board: j.board || "" }; });
+}
+// Points every a[data-site] at the website in the current language. The version and board go along as
+// ?fw= and ?hw=, so the page can show the lamp codes that match this firmware.
+function kiteLinks() {
+	var a = d.querySelectorAll("a[data-site]"), i;
+	function set(q) { for (i = 0; i < a.length; i++) a[i].href = kiteSite(a[i].getAttribute("data-site")) + q; }
+	set("");
+	kiteVersion().then(function(v) {
+		set((v.version ? "?fw=" + encodeURIComponent(v.version) : "") + (v.board ? (v.version ? "&" : "?") + "hw=" + encodeURIComponent(v.board) : ""));
+	}).catch(function() {});
+}
 // Turns every help button into a home icon that opens the Kustgloed website.
 function kiteHomeInit() {
 	var t = kiteLang() === "en" ? "Kustgloed website" : "Kustgloed-website";

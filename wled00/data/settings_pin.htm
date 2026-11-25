@@ -1,24 +1,42 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
 <head>
-	<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+	<meta content="width=device-width, initial-scale=1" name="viewport">
 	<meta charset="utf-8">
-	<title>PIN required</title>
+	<meta name="theme-color" content="#0b1a2e">
+	<title>Kustgloed – PIN</title>
+	<script src="common.js"></script>
 	<script>
-		var d = document;
 		function B() { window.open("../settings","_self"); }
+		document.addEventListener("DOMContentLoaded", function() {
+			kiteI18n({
+				nl: { title: "Vul de pincode in", intro: "De pincode heeft 8 tekens.", go: "Verder", pin: "Pincode" },
+				en: { title: "Enter the PIN code", intro: "The PIN code has 8 characters.", go: "Continue", pin: "PIN code" }
+			}, function(l) { document.getElementsByName("PIN")[0].placeholder = l === "en" ? "PIN code" : "Pincode"; });
+		});
 	</script>
 	<style>
-		@import url("style.css");
+		* { box-sizing: border-box; }
+		body { font-family: Verdana, Helvetica, sans-serif; background: #0b1a2e; margin: 0; color: #eaf2fb; }
+		.lang { position: absolute; top: 10px; right: 10px; }
+		.lang button { width: 52px; margin: 0 2px; padding: 6px; font-size: 14px; }
+		.lang button.on { background: #f4c542; color: #0b1a2e; }
+		.wrap { max-width: 520px; margin: 0 auto; padding: 64px 16px 32px; }
+		h1 { font-size: 24px; margin: 0 0 8px; }
+		p { line-height: 1.5; margin: 0 0 16px; color: #b9c9dc; font-size: 15px; }
+		button { outline: none; cursor: pointer; font-family: helvetica; background: #1c3354; color: #fff; border: 0; border-radius: 25px; padding: 10px 18px; font-size: 16px; }
+		button.go { background: #f4c542; color: #0b1a2e; width: 100%; margin-top: 12px; padding: 12px; }
+		input { width: 100%; background: #0b1a2e; color: #eaf2fb; border: 1px solid #24406a; border-radius: 10px; padding: 12px; font-size: 20px; letter-spacing: 3px; text-align: center; }
 	</style>
 </head>
 <body onload="if(location.pathname.indexOf('/update')==0)d.Sf.action='/settings';d.getElementsByName('PIN')[0].focus()">
+	<div class="lang"><button type="button" id="nl">NL</button><button type="button" id="en">EN</button></div>
 	<form id="form_s" name="Sf" method="post">
-	<div class="sec">
-		<h2>Please enter settings PIN code</h2>
+	<div class="wrap">
+		<h1 data-t="title"></h1>
+		<p data-t="intro"></p>
 		<input type="password" name="PIN" size="8" maxlength="8" minlength="8" pattern="[A-Za-z0-9]{8}" autocomplete="off" title="8 letters or digits" autofocus>
-		<hr>
-		<button type="button" onclick="B()">Back</button><button type="submit">Submit</button>
+		<button type="submit" class="go" data-t="go"></button>
 	</div>
 	</form>
 </body>

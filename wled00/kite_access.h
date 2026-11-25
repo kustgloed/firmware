@@ -176,7 +176,7 @@ inline bool protectedFile(const char* name) {
 }
 
 // With a phone on the setup AP, the commit waits so the phone can load the result page first.
-constexpr uint32_t RESULT_WINDOW_MS = 20000;
+constexpr uint32_t RESULT_WINDOW_MS = 120000;
 inline bool commitDue(uint32_t connectedMs, uint32_t now, uint8_t apClients) {
   return apClients == 0 || static_cast<uint32_t>(now - connectedMs) >= RESULT_WINDOW_MS;
 }

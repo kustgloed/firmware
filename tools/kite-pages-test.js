@@ -99,8 +99,8 @@ describe('common.js home icon', () => {
 const helpPages = fs.readdirSync(dataDir).filter((f) => f.endsWith('.htm') && read(f).includes('class="helpB"'));
 
 describe('help buttons', () => {
-  it('finds the ten pages that have one', () => {
-    assert.strictEqual(helpPages.length, 10, helpPages.join(', '));
+  it('finds the eight pages that have one', () => {
+    assert.strictEqual(helpPages.length, 8, helpPages.join(', '));
   });
 
   for (const page of helpPages) {
@@ -113,6 +113,12 @@ describe('help buttons', () => {
   }
 });
 
+// Evaluates the page's translation table and compares the NL and EN keys.
+function assertSameKeys(html) {
+  const T = vm.runInNewContext('(' + html.match(/const T = (\{[\s\S]*?\n\t+\});/)[1] + ')');
+  assert.deepStrictEqual(Object.keys(T.en).sort(), Object.keys(T.nl).sort());
+}
+
 describe('welcome page', () => {
   const html = read('welcome.htm');
 
@@ -123,11 +129,103 @@ describe('welcome page', () => {
     assert.doesNotMatch(html, /wled\.me|data:image|WLED/i);
   });
 
-  it('links the settings page and both guides through the language helpers', () => {
-    assert.match(html, /\.\/settings/);
-    assert.match(html, /kiteSite\('firmware-update\/'\)/);
-    assert.match(html, /kiteSite\('status-lamp\/'\)/);
-    assert.match(html, /kiteSetLang/);
+  it('links the hub tiles, the lamp manual and the test button', () => {
+    assert.doesNotMatch(html, /\.\/settings/);
+    assert.match(html, /data-t="wifiT"/);
+    assert.match(html, /href="\.\/update"/);
+    assert.match(html, /data-site="status-lamp\/"/);
+    assert.match(html, /kiteLinks\(\)/);
+    assert.match(html, /kiteI18n\(T/);
+    assert.match(html, /kiteLampTest/);
+    assert.match(html, /\/json\/info/);
+  });
+
+  it('shows the welcome screen only until the start button was used', () => {
+    assert.match(html, /kite-welcomed/);
+    assert.match(html, /id="start"/);
+  });
+
+  it('has the same keys in both languages', () => {
+    assertSameKeys(html);
+  });
+});
+
+describe('update page', () => {
+  const html = read('update.htm');
+
+  it('keeps the upload form fields and the lamp manual link', () => {
+    assert.match(html, /name="OP"/);
+    assert.match(html, /name="update"/);
+    assert.match(html, /name="skipValidation"/);
+    assert.match(html, /data-site="status-lamp\/"/);
+    assert.match(html, /data-site="firmware-update\/"/);
+  });
+
+  it('has the same keys in both languages', () => {
+    assertSameKeys(html);
+  });
+
+  it('shows progress, waits for the reboot and has a rollback hint', () => {
+    assert.match(html, /upload\.onprogress/);
+    assert.match(html, /waitBack/);
+    assert.match(html, /rbT/);
+  });
+});
+
+describe('site links', () => {
+  it('add the firmware version and board to each site link', async () => {
+    const { ctx } = loadCommon();
+    const links = [{ href: '', getAttribute: () => 'status-lamp/' }];
+    ctx.document.querySelectorAll = () => links;
+    ctx.fetch = () => Promise.resolve({ ok: true, json: () => ({ version: '1.2.3+abc', board: 'esp32c3' }) });
+    ctx.kiteLinks();
+    assert.strictEqual(links[0].href, 'https://kustgloed.nl/status-lamp/');
+    await new Promise((r) => setTimeout(r, 0));
+    assert.strictEqual(links[0].href, 'https://kustgloed.nl/status-lamp/?fw=1.2.3&hw=esp32c3');
+  });
+});
+
+describe('local lamp test', () => {
+  it('the usermod reads kiteLampTest from the JSON state', () => {
+    const cpp = fs.readFileSync(path.join(__dirname, '..', 'usermods', 'kite_wind', 'kite_wind.cpp'), 'utf8');
+    assert.match(cpp, /readFromJsonState\(JsonObject& root\) override/);
+    assert.match(cpp, /root\["kiteLampTest"\]/);
+  });
+});
+
+describe('setup pages', () => {
+  const wifi = read('settings_wifi.htm');
+
+  it('Wi-Fi page keeps to the station form fields and the controller script hooks', () => {
+    assert.match(wifi, /function resetWiFi/);
+    assert.match(wifi, /function addWiFi\(ssid/);
+    assert.match(wifi, /name="D0"/);
+    assert.match(wifi, /class="sip"/);
+    assert.match(wifi, /name="Sf"/);
+    assert.doesNotMatch(wifi, /name="ET|name="EA|name="EI/);
+    assert.match(wifi, /N\(\);\s*\n\t\t\}/, 'scans on load');
+  });
+
+  it('Wi-Fi and PIN pages are translated and escape network values', () => {
+    assertSameKeys(wifi);
+    assert.match(wifi, /esc\(ssid\)/);
+    const pin = read('settings_pin.htm');
+    assert.match(pin, /name="PIN"/);
+    assert.match(pin, /kiteI18n/);
+  });
+
+  it('message page shows both languages and a countdown for the Wi-Fi result', () => {
+    const msg = read('msg.htm');
+    assert.match(msg, /kiteI18n/);
+    assert.match(msg, /getElementById\("cd"\)/);
+    const cpp = fs.readFileSync(path.join(__dirname, '..', 'wled00', 'wled_server.cpp'), 'utf8');
+    assert.match(cpp, /RESULT_WINDOW_MS \/ 1000/);
+    assert.match(cpp, /body, 255\)/);
+  });
+
+  it('keeps the setup AP up for two minutes while a phone is connected', () => {
+    const h = fs.readFileSync(path.join(__dirname, '..', 'wled00', 'kite_access.h'), 'utf8');
+    assert.match(h, /RESULT_WINDOW_MS = 120000;/);
   });
 });
 
@@ -142,7 +240,8 @@ describe('server root route', () => {
 
 describe('installed version', () => {
   it('update page strips the build suffix', () => {
-    assert.match(read('update.htm'), /\(d\.version \|\| 'Unknown'\)\.split\('\+'\)\[0\]/);
+    assert.match(read('update.htm'), /kiteVersion\(\)/);
+    assert.match(read('common.js'), /\(j\.version \|\| ""\)\.split\("\+"\)\[0\]/);
   });
 
   it('security page reads /kite-version instead of the upstream version', () => {
