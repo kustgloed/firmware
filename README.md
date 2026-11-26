@@ -34,8 +34,9 @@ access after flashing.
 
 ## ESP32-C3 build
 
-`kite_c3` polls over verified HTTPS and uses its own partition table,
-`tools/partitions-kite-c3.csv`, with two OTA slots of 1.875 MiB and a
+`kite_c3` polls `GET /device/render` over verified HTTPS, one request per poll,
+and decodes the protobuf response from the connection. It uses its own
+partition table, `tools/partitions-kite-c3.csv`, with two OTA slots of 1.875 MiB and a
 192 KiB filesystem. The table cannot change over OTA. Existing C3
 controllers need one USB reflash, which wipes presets and `cfg.json`.
 Judge the image size by the real `firmware.bin` size against the

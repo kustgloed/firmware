@@ -17,7 +17,7 @@ static constexpr uint32_t BLINK_ON_MS = 200;
 static constexpr uint32_t BLINK_SLOT_MS = 400;
 static constexpr uint32_t GROUP_PAUSE_MS = 2000;
 
-static bool blinkOn(Error error, uint32_t elapsed) {
+inline bool blinkOn(Error error, uint32_t elapsed) {
   uint8_t count = static_cast<uint8_t>(error);
   if (!count) return false;
   uint32_t pulseDuration = count * BLINK_SLOT_MS;

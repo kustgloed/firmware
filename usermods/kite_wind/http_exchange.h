@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "cert_dates.h"
-#include "display_contract.h"
 #include "poll_policy.h"
 #include "system_status.h"
 
@@ -17,6 +16,7 @@
 namespace KiteWindHttp {
 using Error = KiteWindStatus::Error;
 
+constexpr size_t MAX_HOST_LENGTH = 127, MAX_KEY_LENGTH = 256, MAX_VERSION_LENGTH = 64;
 constexpr uint32_t CONNECT_TIMEOUT_MS = 8000;
 constexpr unsigned long HANDSHAKE_TIMEOUT_S = 8; // NetworkClientSecure::setHandshakeTimeout() takes seconds
 constexpr uint32_t IO_WINDOW_MS = 8000;          // longest read or write stall without progress
@@ -33,25 +33,11 @@ inline bool heapSufficient(uint32_t freeBytes, uint32_t largestBlock) {
   return freeBytes >= MIN_FREE_HEAP_BYTES && largestBlock >= MIN_LARGEST_BLOCK_BYTES;
 }
 
-// Request framing: close-delimited HTTP/1.0 unless the worker sends several batches over one TLS session.
-// Plain HTTP reads to close, so keep-alive is only valid on a TLS session that ends replies by Content-Length.
-enum class Framing : uint8_t { Http10Close, Http11KeepAlive, Http11Close };
-
-inline Framing framingFor(bool tlsSession, size_t offset, size_t batch, size_t selected) {
-  if (!tlsSession || (offset == 0 && batch >= selected)) return Framing::Http10Close;
-  return offset + batch < selected ? Framing::Http11KeepAlive : Framing::Http11Close;
-}
-
 // True once an exchange started at start has used the whole acceptance deadline; rollover safe.
 inline bool pastDeadline(uint32_t start, uint32_t now) { return static_cast<uint32_t>(now - start) >= DEADLINE_MS; }
 
-// Stall cap for a multi-batch cycle: no batch finished for this long; a stalled cycle is discarded, never merged later. Rollover safe.
-constexpr uint32_t CYCLE_DEADLINE_MS = 60000;
-inline bool cycleExpired(uint32_t start, uint32_t now) { return static_cast<uint32_t>(now - start) >= CYCLE_DEADLINE_MS; }
-
 // Firmware version token: 1 to MAX_VERSION_LENGTH characters of [0-9A-Za-z._+-]. constexpr (C++11 form) so a
 // build define can be checked by static_assert.
-constexpr size_t MAX_VERSION_LENGTH = KiteWindDisplay::MAX_VERSION_LENGTH;
 constexpr bool versionChar(char c) {
   return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '.' || c == '_' || c == '+' || c == '-';
 }
@@ -59,24 +45,6 @@ constexpr bool versionFrom(const char* v, size_t n) {
   return !v[n] ? n > 0 : n < MAX_VERSION_LENGTH && versionChar(v[n]) && versionFrom(v, n + 1);
 }
 constexpr bool validVersion(const char* v) { return v && versionFrom(v, 0); }
-
-// Joins ids with commas in scratch, then formats REQUEST_FORMAT into out.
-// Returns the request length, or 0 when any part would be truncated or the version is invalid.
-inline size_t buildRequest(char* out, size_t outCap, char* scratch, size_t scratchCap, const char* const* ids, size_t count,
-                           const char* host, unsigned port, const char* key, Framing framing, const char* version) {
-  if (!out || !scratch || !outCap || !scratchCap || !count || !validVersion(version)) return 0;
-  size_t used = 0;
-  for (size_t i = 0; i < count; i++) {
-    int written = snprintf(scratch + used, scratchCap - used, "%s%s", i ? "," : "", ids[i]);
-    if (written < 0 || static_cast<size_t>(written) >= scratchCap - used) return 0;
-    used += written;
-  }
-  const char minor = framing == Framing::Http10Close ? '0' : '1';
-  const char* connection = framing == Framing::Http11KeepAlive ? "keep-alive" : "close";
-  int written = snprintf(out, outCap, KiteWindDisplay::REQUEST_FORMAT, scratch, minor, host, port, key, version, connection);
-  if (written <= 0 || static_cast<size_t>(written) >= outCap) return 0;
-  return written;
-}
 
 namespace detail {
 inline char lower(char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c + 32) : c; }
@@ -89,119 +57,82 @@ inline bool nameIs(const char* s, size_t n, const char* literal) {
 inline bool digit(char c) { return c >= '0' && c <= '9'; }
 } // namespace detail
 
+// One poll, one request. The digest is the active definition's SHA-256 as 64 lowercase hex.
+constexpr char RENDER_FORMAT[] = "GET /device/render?contract=2&model=nl-51-v1%s%s HTTP/1.0\r\nHost: %s:%u\r\n"
+  "Authorization: Bearer %s\r\nX-Firmware-Version: %s\r\nAccept: application/x-protobuf\r\n"
+  "Accept-Encoding: identity\r\nConnection: close\r\n\r\n";
+constexpr size_t REQUEST_CAPACITY = 768;  // the widest request needs 727 bytes
+static_assert(sizeof(RENDER_FORMAT) - 1 + 8 + 64 + MAX_HOST_LENGTH + 5 + MAX_KEY_LENGTH + MAX_VERSION_LENGTH < REQUEST_CAPACITY,
+              "request buffer too small");
+// Status line and headers; the body never lands here except for the bytes read past the blank line.
+constexpr size_t HEAD_CAPACITY = 768;
+
+inline bool digestHex(const char* d) {
+  if (!d || strlen(d) != 64) return false;
+  for (size_t i = 0; i < 64; i++) if (!((d[i] >= '0' && d[i] <= '9') || (d[i] >= 'a' && d[i] <= 'f'))) return false;
+  return true;
+}
+
+inline size_t buildRenderRequest(char* out, size_t cap, const char* host, unsigned port, const char* key,
+                                 const char* digest, const char* version) {
+  if (!out || !cap || !host || !key || !validVersion(version) || (digest && !digestHex(digest))) return 0;
+  int written = snprintf(out, cap, RENDER_FORMAT, digest ? "&digest=" : "", digest ? digest : "", host, port, key, version);
+  if (written <= 0 || static_cast<size_t>(written) >= cap) return 0;
+  return written;
+}
+
 struct Head {
   int status = 0;
-  char* body = nullptr;
-  size_t bodyLength = 0;
+  size_t headLength = 0;     // through the blank line
+  bool hasLength = false;
+  size_t contentLength = 0;
 };
 
-enum class Progress : uint8_t { Incomplete, Complete, Invalid };
-
-// Content-Length framing for a reply that is still arriving (data is not NUL-terminated).
-// Complete once the declared body has fully arrived. Without Content-Length the reply stays
-// Incomplete and the caller reads to close. Chunked, bad, conflicting or excess bytes are Invalid.
-inline Progress responseProgress(const char* data, size_t length) {
+// Parses the status line and headers once "\r\n\r\n" is in data[0, length). Bytes after the
+// blank line are not inspected, so a binary body is fine. Rejects chunked transfer, bad or
+// conflicting Content-Length, NUL, bare CR or LF, and whitespace in header names.
+inline bool parseHead(const char* data, size_t length, Head& head) {
+  head = Head();
+  if (!data || length < 16) return false;
+  if (strncmp(data, "HTTP/1.0 ", 9) && strncmp(data, "HTTP/1.1 ", 9)) return false;
+  if (!detail::digit(data[9]) || !detail::digit(data[10]) || !detail::digit(data[11])) return false;
+  if (data[12] != ' ' && data[12] != '\r') return false;
   size_t end = 0;
-  bool found = false;
   for (size_t i = 0; i + 3 < length; i++) {
-    if (data[i] == '\r' && data[i + 1] == '\n' && data[i + 2] == '\r' && data[i + 3] == '\n') {
-      end = i;
-      found = true;
-      break;
-    }
+    if (data[i] == '\0') return false;
+    if (data[i] == '\n' && (!i || data[i - 1] != '\r')) return false;
+    if (data[i] == '\r' && data[i + 1] != '\n') return false;
+    if (data[i] == '\r' && data[i + 1] == '\n' && data[i + 2] == '\r' && data[i + 3] == '\n') { end = i; break; }
   }
-  if (!found) return Progress::Incomplete;
+  if (!end) return false;
   size_t line = 0;
   while (line < end && !(data[line] == '\r' && data[line + 1] == '\n')) line++;
   line += 2;
-  bool hasLength = false;
-  size_t declared = 0;
   while (line < end + 2) {
     size_t stop = line;
     while (stop < end && !(data[stop] == '\r' && data[stop + 1] == '\n')) stop++;
     size_t colon = line;
     while (colon < stop && data[colon] != ':') colon++;
-    if (colon == stop || colon == line) return Progress::Invalid;
-    if (detail::nameIs(data + line, colon - line, "transfer-encoding")) return Progress::Invalid;
+    if (colon == stop || colon == line) return false;
+    for (size_t i = line; i < colon; i++) if (data[i] == ' ' || data[i] == '\t') return false;
+    if (detail::nameIs(data + line, colon - line, "transfer-encoding")) return false;
     if (detail::nameIs(data + line, colon - line, "content-length")) {
       size_t i = colon + 1;
       while (i < stop && (data[i] == ' ' || data[i] == '\t')) i++;
       size_t value = 0, digits = 0;
       while (i < stop && detail::digit(data[i])) {
-        if (++digits > 9) return Progress::Invalid;
+        if (++digits > 9) return false;
         value = value * 10 + static_cast<size_t>(data[i++] - '0');
       }
       while (i < stop && (data[i] == ' ' || data[i] == '\t')) i++;
-      if (!digits || i != stop || (hasLength && value != declared)) return Progress::Invalid;
-      hasLength = true;
-      declared = value;
+      if (!digits || i != stop || (head.hasLength && value != head.contentLength)) return false;
+      head.hasLength = true;
+      head.contentLength = value;
     }
     line = stop + 2;
   }
-  if (!hasLength) return Progress::Incomplete;
-  size_t have = length - (end + 4);
-  return have < declared ? Progress::Incomplete : have == declared ? Progress::Complete : Progress::Invalid;
-}
-
-// Validates the status line and headers of a complete close-delimited reply.
-// response holds length bytes plus a NUL. Rejects chunked or mismatched bodies and embedded NULs.
-inline bool parseHead(char* response, size_t length, Head& head) {
-  head = Head();
-  if (!response || length < 13 || response[length] != '\0') return false;
-  if (strncmp(response, "HTTP/1.0 ", 9) && strncmp(response, "HTTP/1.1 ", 9)) return false;
-  if (!detail::digit(response[9]) || !detail::digit(response[10]) || !detail::digit(response[11])) return false;
-  if (response[12] != ' ' && response[12] != '\r') return false;
-  head.status = (response[9] - '0') * 100 + (response[10] - '0') * 10 + (response[11] - '0');
-  size_t end = 0;
-  for (size_t i = 0; i + 3 < length; i++) {
-    if (response[i] == '\0') return false;
-    // Bare CR or LF framing is rejected.
-    if (response[i] == '\n' && (!i || response[i - 1] != '\r')) return false;
-    if (response[i] == '\r' && response[i + 1] != '\n') return false;
-    if (response[i] == '\r' && response[i + 1] == '\n' && response[i + 2] == '\r' && response[i + 3] == '\n') {
-      end = i;
-      break;
-    }
-  }
-  if (!end) return false;
-  size_t bodyStart = end + 4;
-  size_t bodyLength = length - bodyStart;
-  if (strlen(response + bodyStart) != bodyLength) return false;
-  bool hasLength = false;
-  size_t declared = 0;
-  // Header lines start after the first CRLF and stop at the blank line.
-  size_t line = 0;
-  while (line < end && !(response[line] == '\r' && response[line + 1] == '\n')) line++;
-  line += 2;
-  while (line < end + 2) {
-    size_t stop = line;
-    while (stop < end && !(response[stop] == '\r' && response[stop + 1] == '\n')) stop++;
-    size_t colon = line;
-    while (colon < stop && response[colon] != ':') colon++;
-    if (colon == stop || colon == line) return false;
-    const char* name = response + line;
-    size_t nameLength = colon - line;
-    // No folded lines and no whitespace in names, so "Content-Length :" cannot slip past the checks.
-    for (size_t i = 0; i < nameLength; i++) if (name[i] == ' ' || name[i] == '\t') return false;
-    if (detail::nameIs(name, nameLength, "transfer-encoding")) return false;
-    if (detail::nameIs(name, nameLength, "content-length")) {
-      size_t i = colon + 1;
-      while (i < stop && (response[i] == ' ' || response[i] == '\t')) i++;
-      size_t value = 0, digits = 0;
-      while (i < stop && detail::digit(response[i])) {
-        if (++digits > 9) return false;
-        value = value * 10 + static_cast<size_t>(response[i++] - '0');
-      }
-      while (i < stop && (response[i] == ' ' || response[i] == '\t')) i++;
-      if (!digits || i != stop || (hasLength && value != declared)) return false;
-      hasLength = true;
-      declared = value;
-    }
-    line = stop + 2;
-  }
-  if (hasLength && declared != bodyLength) return false;
-  head.body = response + bodyStart;
-  head.bodyLength = bodyLength;
+  head.status = (data[9] - '0') * 100 + (data[10] - '0') * 10 + (data[11] - '0');
+  head.headLength = end + 4;
   return true;
 }
 
@@ -209,7 +140,7 @@ inline bool parseHead(char* response, size_t length, Head& head) {
 inline Error httpError(int status) {
   if (status == 200) return Error::None;
   if (status == 401 || status == 403) return Error::Authentication; // only 401 gets the long retry (Schedule::unauthorized)
-  if (status == 404) return Error::UnknownSpot;
+  if (status == 404) return Error::UnknownSpot; // a refused route: the edge or the server gate
   if (status == 400) return Error::BadRequest;
   if (status >= 500 && status <= 599) return Error::ServerFailure;
   return Error::Api;
@@ -245,8 +176,6 @@ struct Schedule {
   unsigned failures = 0;
   bool due(uint32_t now) const { return static_cast<uint32_t>(now - base) >= delay; }
   void reset(uint32_t now) { base = now; delay = 0; failures = 0; }
-  // The next batch of the same cycle starts at once; failures survive until succeeded() so backoff escalates.
-  void continueCycle(uint32_t now) { base = now; delay = 0; }
   void succeeded(uint32_t now) { base = now; failures = 0; delay = KiteWindPoll::retryDelayMs(0, false); }
   void failed(uint32_t now) {
     base = now;

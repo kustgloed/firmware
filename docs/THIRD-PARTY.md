@@ -21,6 +21,7 @@ and the existing notices under [vendored dependencies](../wled00/src/dependencie
 | lwIP | [BSD-style licence](https://github.com/lwip-tcpip/lwip/blob/master/COPYING). |
 | Mbed TLS | [Apache-2.0 or GPL-2.0-or-later](https://github.com/Mbed-TLS/mbedtls/blob/development/LICENSE). |
 | ISRG Root X1 | Public trust anchor from [Let's Encrypt](https://letsencrypt.org/certificates/). |
+| nanopb 0.4.9.1 (decoder runtime and generated code) | zlib licence, as recorded in the [vendored licence](../usermods/kite_wind/nanopb/LICENSE.txt). |
 
 ## Open checks before device binaries are distributed
 
