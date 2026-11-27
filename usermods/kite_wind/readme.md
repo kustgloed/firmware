@@ -59,7 +59,7 @@ The response is Protocol Buffers (`contracts/device/render.proto` in the Kustglo
 
 ## Brightness and fallback
 
-- Spot lamps use the server brightness, which already includes night dimming. WLED brightness is held at full while the usermod drives the strip, so it does not change the lamps. The WLED power limit still applies.
+- Spot lamps use the server brightness, which is 0 while the map is off for the night, and otherwise one lamp level set on the server for all maps. WLED brightness is held at full while the usermod drives the strip, so it does not change the lamps. The WLED power limit still applies.
 - A channel value is the lamp color scaled by the brightness and the track percentage.
 - After the hold lapses without a success, and after a restart, the spot lamps are off.
 - A failed poll shows its error code at once. The lamps keep the last complete result until the hold lapses.
@@ -67,7 +67,7 @@ The response is Protocol Buffers (`contracts/device/render.proto` in the Kustglo
 
 ## System lamp
 
-Physical pixel 0 (the first lamp) shows solid green while the last complete response is fresh and reports usable weather. Faults blink red in counted groups: 200 ms on, 200 ms off per blink, then a two-second pause. The status lamp uses a fixed 50% level, independent of the server brightness. It stays available even if segment zero excludes pixel 0.
+Physical pixel 0 (the first lamp) shows solid green while the last complete response is fresh and reports usable weather. While the server turns the map off for the night (brightness 0), the status lamp is dark unless a fault blinks. Faults blink red in counted groups: 200 ms on, 200 ms off per blink, then a two-second pause. The status lamp uses a fixed 33% level, independent of the server brightness. It stays available even if segment zero excludes pixel 0.
 
 | Blinks | Meaning |
 | --- | --- |

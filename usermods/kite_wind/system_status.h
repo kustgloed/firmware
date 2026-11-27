@@ -16,6 +16,7 @@ static constexpr uint16_t STATUS_PIXEL = 0;
 static constexpr uint32_t BLINK_ON_MS = 200;
 static constexpr uint32_t BLINK_SLOT_MS = 400;
 static constexpr uint32_t GROUP_PAUSE_MS = 2000;
+static constexpr uint8_t STATUS_LEVEL = 84;  // fixed local level for the status lamp (33%)
 
 inline bool blinkOn(Error error, uint32_t elapsed) {
   uint8_t count = static_cast<uint8_t>(error);
@@ -23,6 +24,13 @@ inline bool blinkOn(Error error, uint32_t elapsed) {
   uint32_t pulseDuration = count * BLINK_SLOT_MS;
   uint32_t phase = elapsed % (pulseDuration + GROUP_PAUSE_MS);
   return phase < pulseDuration && phase % BLINK_SLOT_MS < BLINK_ON_MS;
+}
+
+// Status lamp color before the fixed level (0x00RRGGBB): green while fine, dark while fine and
+// the map is off for the night, red blinks for every error.
+inline uint32_t statusRgb(Error error, bool mapOff, uint32_t elapsed) {
+  if (error == Error::None) return mapOff ? 0 : 0x00FF00u;
+  return blinkOn(error, elapsed) ? 0xFF0000u : 0;
 }
 } // namespace KiteWindStatus
 // AI: end

@@ -35,7 +35,7 @@ typedef struct _kwm_RenderResponse {
     kwm_Definition definition; /* omitted when the digest matches */
     pb_callback_t lamps; /* at most 51; an unlisted lamp is off */
     kwm_Weather weather;
-    uint32_t brightness; /* 0-255, night dimming applied */
+    uint32_t brightness; /* 0 = map off at night, else the on level (0-255) */
 } kwm_RenderResponse;
 
 typedef struct _kwm_Track {

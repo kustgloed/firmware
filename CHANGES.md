@@ -17,7 +17,7 @@ The base is the upstream **development snapshot 17.0.0-devV5**, pinned to
 | `tools/kite-wind-poll-policy-test.cpp` | Checks poll timing and host classification. |
 | `tools/kite-wind-proto-test.cpp` | Checks the version-2 protobuf decoder: the largest response, stream and buffer decoding, early end of the connection, every list and value limit, track layout and lamp references. |
 | `tools/kite-wind-render-test.cpp` | Checks the version-2 player: activation, digest reuse, rejection, brightness scaling and value math. |
-| `tools/kite-wind-status-test.cpp` | Checks system lamp blink timing. |
+| `tools/kite-wind-status-test.cpp` | Checks system lamp blink timing, color and level. |
 | `tools/kite-pages-test.js` | Checks the language helpers, the site links with firmware version, the home icon markup, the welcome and hub page, the update page, the root route and the installed version display. |
 | `tools/release-check/` | Builds and scans packaged release images in a clean container for all four supported boards. Passes the commit and its time to the build, checks both in the ESP32-C3 build log, and runs the certificate date test. |
 | `tools/partitions-kite-s3.csv` | Supplies the existing ESP32-S3 flash partition layout. |
