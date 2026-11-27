@@ -595,7 +595,10 @@ WLED_GLOBAL byte colNlT[] _INIT_N(({ 0, 0, 0, 0 }));        // current nightligh
 // brightness
 // lastOnTime is private to button.cpp - see there.
 WLED_GLOBAL bool offMode             _INIT(!turnOnAtBoot);
-WLED_GLOBAL byte briS                _INIT(128);           // default brightness
+#ifndef KITE_BRI_DEFAULT
+  #define KITE_BRI_DEFAULT 128 // build default for the startup brightness
+#endif
+WLED_GLOBAL byte briS                _INIT(KITE_BRI_DEFAULT); // default brightness
 WLED_GLOBAL byte bri                 _INIT(briS);          // global brightness (set)
 WLED_GLOBAL byte briOld              _INIT(0);             // global brightness while in transition loop (previous iteration)
 WLED_GLOBAL byte briT                _INIT(0);             // global brightness during transition
