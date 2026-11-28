@@ -157,6 +157,10 @@ describe('welcome page', () => {
   it('has the same keys in both languages', () => {
     assertSameKeys(html);
   });
+
+  it('keeps the language buttons above the animated page content', () => {
+    assert.match(html, /\.lang \{[^}]*z-index: 1;/);
+  });
 });
 
 describe('update page', () => {
